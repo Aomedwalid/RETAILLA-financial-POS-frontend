@@ -1,0 +1,3187 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+api.ts
+components/CreateBillModal.tsx
+components/CreatePurchaseOrderModal.tsx
+components/CreateVendorModal.tsx
+components/DeactivateVendor.tsx
+components/OutstandingBillsWidget.tsx
+components/PayBillModal.tsx
+components/ProgressBar.tsx
+components/ReceiptIngestionModal.tsx
+components/StatCards.tsx
+components/StatusBadge.tsx
+components/utils.ts
+components/VendorBillsTab.tsx
+components/VendorDetailPanel.tsx
+components/VendorList.tsx
+components/VendorOverviewTab.tsx
+components/VendorPOTab.tsx
+types.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="api.ts">
+import { api } from "@/lib/api";
+import http from "@/lib/axios";
+import type {
+  VendorResponse,
+  CreateVendorRequest,
+  PurchaseOrderResponse,
+  BillResponse,
+  CreateBillRequest,
+  PayBillRequest,
+  VendorBillPaymentResponse,
+  VendorOverview,
+  OutstandingBill,
+  ProcessReceiptResponse,
+  ReceiptConfirmRequest,
+  ConfirmReceiptResponse,
+} from "./types";
+
+export const vendorsApi = {
+  list: () =>
+    api.get<VendorResponse[]>("/api/vendors"),
+
+  get: (vendorId: string) =>
+    api.get<VendorResponse>(`/api/vendors/${vendorId}`),
+
+  create: (body: CreateVendorRequest) =>
+    api.post<VendorResponse>("/api/vendors", body),
+
+  deactivate: (vendorId: string) =>
+    api.delete<VendorResponse>(`/api/vendors/${vendorId}`),
+
+  listPOs: (vendorId: string) =>
+    api.get<PurchaseOrderResponse[]>(`/api/vendors/${vendorId}/purchase-orders`),
+
+  receivePO: (vendorId: string, poId: string) =>
+    api.post<PurchaseOrderResponse>(`/api/vendors/${vendorId}/purchase-orders/${poId}/receive`),
+
+  createBill: (vendorId: string, poId: string, body: CreateBillRequest) =>
+    api.post<BillResponse>(`/api/vendors/${vendorId}/purchase-orders/${poId}/bills`, body),
+
+  listOutstandingBills: () =>
+    api.get<OutstandingBill[]>("/api/vendors/bills/outstanding"),
+
+  listVendorBills: (vendorId: string, status?: string) =>
+    api.get<BillResponse[]>(`/api/vendors/${vendorId}/bills`, status ? { status } : undefined),
+
+  getOverview: (vendorId: string) =>
+    api.get<VendorOverview>(`/api/vendors/${vendorId}/overview`),
+
+  payBill: (vendorId: string, billId: string, body: PayBillRequest) =>
+    api.post<VendorBillPaymentResponse>(`/api/vendors/${vendorId}/bills/${billId}/payments`, body),
+
+  // ─── Receipt Ingestion ───
+
+  processReceipt: (vendorId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return http
+      .post<{ status: number; message: string; data: ProcessReceiptResponse }>(
+        `/api/vendors/${vendorId}/receipts/process`,
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      )
+      .then((res) => res.data.data);
+  },
+
+  confirmReceipt: (vendorId: string, body: ReceiptConfirmRequest) =>
+    api.post<ConfirmReceiptResponse>(`/api/vendors/${vendorId}/receipts/confirm`, body),
+
+  manualReceipt: (vendorId: string, body: ReceiptConfirmRequest) =>
+    api.post<ConfirmReceiptResponse>(`/api/vendors/${vendorId}/receipts/manual`, body),
+};
+</file>
+
+<file path="components/CreateBillModal.tsx">
+import { useState } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+import type { CreateBillRequest } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+
+interface CreateBillModalProps {
+  vendorId: string;
+  poId: string;
+  poTotal: number;
+  onClose: () => void;
+  onCreated: () => void;
+}
+
+export default function CreateBillModal({ vendorId, poId, poTotal, onClose, onCreated }: CreateBillModalProps) {
+  const [billReference, setBillReference] = useState("");
+  const [amount, setAmount] = useState(String(poTotal));
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { setError("Amount must be greater than 0"); return; }
+    setError("");
+    setSubmitting(true);
+    try {
+      const body: CreateBillRequest = { amount: amt };
+      if (billReference.trim()) body.bill_reference = billReference.trim();
+      if (dueDate) body.due_date = new Date(dueDate).toISOString();
+      if (notes.trim()) body.notes = notes.trim();
+      await vendorsApi.createBill(vendorId, poId, body);
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create bill");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="relative w-full max-w-md bg-surface-container-high rounded-2xl border border-outline-variant shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+          <h3 className="font-headline-sm text-headline-sm text-on-surface">Create Bill</h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="bg-surface-container-low rounded-xl p-3 flex items-center justify-between text-xs">
+            <span className="text-on-surface-variant">PO #{poId.slice(0, 8)}</span>
+            <span className="font-data-table text-on-surface font-semibold">{fmt(poTotal)}</span>
+          </div>
+          <Field label="Bill Reference (optional)">
+            <input value={billReference} onChange={(e) => setBillReference(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="e.g. INV-001" />
+          </Field>
+          <Field label="Amount *">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">$</span>
+              <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full h-10 pl-7 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" />
+            </div>
+          </Field>
+          <Field label="Due Date (optional)">
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" />
+          </Field>
+          <Field label="Notes (optional)">
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary resize-none" placeholder="Optional notes" />
+          </Field>
+          {error && <p className="text-sm text-error bg-error/10 px-3 py-2 rounded-lg">{error}</p>}
+        </div>
+        <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3">
+          <button onClick={onClose} disabled={submitting} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+            {submitting && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
+            Create Bill
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+</file>
+
+<file path="components/CreatePurchaseOrderModal.tsx">
+"use client";
+
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+import { productsApi, categoriesApi } from "@/features/products/api";
+import { fmt } from "@/features/vendors/types";
+import type { Category, Discount } from "@/features/products/types";
+import type { ConfirmReceiptResponse } from "@/features/vendors/types";
+
+export interface VariantForm {
+  id: string;
+  attrs: { key: string; value: string }[];
+  quantity: number;
+  unit_cost: number;
+  price: string;
+}
+
+export interface LineForm {
+  id: string;
+  raw_name: string;
+  product_name: string;
+  is_variant_group: boolean;
+  matched_product_id: string | null;
+  is_new_product: boolean;
+  description: string;
+  price: string;
+  cost: string;
+  category_id: string;
+  discount_id: string;
+  low_stock_threshold: string;
+  internal_notes: string;
+  variants: VariantForm[];
+}
+
+interface CreatePurchaseOrderModalProps {
+  vendorId: string;
+  vendorName: string;
+  onClose: () => void;
+  onDone: (result: ConfirmReceiptResponse) => void;
+  initialLines?: LineForm[];
+  initialBillReference?: string;
+  initialDueDate?: string;
+  initialNotes?: string;
+  isReopen?: boolean;
+  readOnly?: boolean;
+}
+
+let _idCounter = 0;
+function uid() { return `po_${++_idCounter}`; }
+
+function makeEmptyLine(): LineForm {
+  return {
+    id: uid(),
+    raw_name: "",
+    product_name: "",
+    is_variant_group: false,
+    matched_product_id: null,
+    is_new_product: true,
+    description: "",
+    price: "",
+    cost: "",
+    category_id: "",
+    discount_id: "",
+    low_stock_threshold: "",
+    internal_notes: "",
+    variants: [{ id: uid(), attrs: [], quantity: 1, unit_cost: 0, price: "" }],
+  };
+}
+
+function makeEmptyVariant(): VariantForm {
+  return { id: uid(), attrs: [], quantity: 1, unit_cost: 0, price: "" };
+}
+
+type SearchableSelectProps = {
+  items: { id: string; name: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder: string;
+  loading?: boolean;
+  error?: string;
+};
+
+function SearchableSelect({ items, value, onChange, placeholder, loading, error }: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = items.find((i) => i.id === value);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filtered = useMemo(
+    () => items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase())),
+    [items, search]
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => { setOpen(!open); setSearch(""); }}
+        className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-left flex items-center justify-between gap-2 hover:border-outline/50 transition-colors"
+      >
+        <span className={selected ? "text-on-surface truncate" : "text-outline truncate"}>
+          {selected ? selected.name : placeholder}
+        </span>
+        <span className="material-symbols-outlined text-[16px] text-outline shrink-0">arrow_drop_down</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 w-full bg-surface-container-high border border-outline-variant rounded-xl shadow-2xl overflow-hidden">
+          <div className="p-2 border-b border-outline-variant/50">
+            <input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-8 px-2.5 rounded-lg bg-surface-container-lowest border border-outline/20 text-sm text-on-surface outline-none focus:border-primary"
+              placeholder="Search..."
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {loading ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 text-sm text-outline">
+                <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                Loading...
+              </div>
+            ) : error ? (
+              <div className="px-3 py-2.5 text-sm text-error">{error}</div>
+            ) : filtered.length === 0 ? (
+              <div className="px-3 py-2.5 text-sm text-outline">No results</div>
+            ) : (
+              filtered.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => { onChange(item.id); setOpen(false); }}
+                  className={`w-full text-left px-3 py-2.5 text-sm hover:bg-surface-variant/30 transition-colors ${
+                    value === item.id ? "text-primary font-semibold bg-primary/5" : "text-on-surface-variant"
+                  }`}
+                >
+                  {item.name}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CreatePurchaseOrderModal({
+  vendorId, vendorName, onClose, onDone,
+  initialLines, initialBillReference, initialDueDate, initialNotes, isReopen, readOnly,
+}: CreatePurchaseOrderModalProps) {
+  const [lines, setLines] = useState<LineForm[]>(() => initialLines ?? [makeEmptyLine()]);
+  const [billReference, setBillReference] = useState(initialBillReference ?? "");
+  const [dueDate, setDueDate] = useState(initialDueDate ?? "");
+  const [notes, setNotes] = useState(initialNotes ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<ConfirmReceiptResponse | null>(null);
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [catLoading, setCatLoading] = useState(true);
+  const [catError, setCatError] = useState("");
+
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [discLoading, setDiscLoading] = useState(true);
+  const [discError, setDiscError] = useState("");
+
+  useEffect(() => {
+    categoriesApi.list({ active: true, size: 200 })
+      .then((res) => setCategories(res.items))
+      .catch(() => setCatError("Failed to load categories"))
+      .finally(() => setCatLoading(false));
+    productsApi.getDiscounts()
+      .then(setDiscounts)
+      .catch(() => setDiscError("Failed to load discounts"))
+      .finally(() => setDiscLoading(false));
+  }, []);
+
+  const totalCost = useMemo(() =>
+    lines.reduce((s, line) =>
+      s + line.variants.reduce((sv, v) => sv + v.quantity * v.unit_cost, 0), 0),
+    [lines]
+  );
+
+  const isValid = useMemo(() => {
+    if (lines.length === 0) return false;
+    return lines.every((line) => {
+      if (!line.product_name.trim()) return false;
+      if (line.variants.length === 0) return false;
+      return line.variants.every((v) => {
+        if (v.quantity < 1) return false;
+        if (v.unit_cost <= 0) return false;
+        const p = parseFloat(v.price);
+        if (isNaN(p) || p <= 0) return false;
+        return true;
+      });
+    });
+  }, [lines]);
+
+  function addLine() {
+    setLines((prev) => [...prev, makeEmptyLine()]);
+  }
+
+  function removeLine(lineId: string) {
+    setLines((prev) => prev.filter((l) => l.id !== lineId));
+  }
+
+  function updateLine(lineId: string, patch: Partial<LineForm>) {
+    setLines((prev) => prev.map((l) => (l.id === lineId ? { ...l, ...patch } : l)));
+  }
+
+  function addVariant(lineId: string) {
+    setLines((prev) =>
+      prev.map((l) => (l.id === lineId ? { ...l, variants: [...l.variants, makeEmptyVariant()] } : l))
+    );
+  }
+
+  function removeVariant(lineId: string, variantId: string) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId
+          ? { ...l, variants: l.variants.filter((v) => v.id !== variantId) }
+          : l
+      )
+    );
+  }
+
+  function updateVariant(lineId: string, variantId: string, patch: Partial<VariantForm>) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId
+          ? { ...l, variants: l.variants.map((v) => (v.id === variantId ? { ...v, ...patch } : v)) }
+          : l
+      )
+    );
+  }
+
+  function addAttribute(lineId: string, variantId: string) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId
+          ? {
+              ...l,
+              variants: l.variants.map((v) =>
+                v.id === variantId
+                  ? { ...v, attrs: [...v.attrs, { key: "", value: "" }] }
+                  : v
+              ),
+            }
+          : l
+      )
+    );
+  }
+
+  function updateAttribute(lineId: string, variantId: string, attrIndex: number, patch: Partial<{ key: string; value: string }>) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId
+          ? {
+              ...l,
+              variants: l.variants.map((v) =>
+                v.id === variantId
+                  ? {
+                      ...v,
+                      attrs: v.attrs.map((a, i) => (i === attrIndex ? { ...a, ...patch } : a)),
+                    }
+                  : v
+              ),
+            }
+          : l
+      )
+    );
+  }
+
+  function removeAttribute(lineId: string, variantId: string, attrIndex: number) {
+    setLines((prev) =>
+      prev.map((l) =>
+        l.id === lineId
+          ? {
+              ...l,
+              variants: l.variants.map((v) =>
+                v.id === variantId
+                  ? { ...v, attrs: v.attrs.filter((_, i) => i !== attrIndex) }
+                  : v
+              ),
+            }
+          : l
+      )
+    );
+  }
+
+  const handleSubmit = useCallback(async () => {
+    if (!isValid) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const payload = {
+        lines: lines.map((l) => {
+          const line: Record<string, unknown> = {
+            raw_name: l.raw_name || l.product_name,
+            product_name: l.product_name,
+            is_variant_group: l.is_variant_group,
+            matched_product_id: l.matched_product_id,
+            variants: l.variants.map((v) => {
+              const attrs: Record<string, string> = {};
+              for (const a of v.attrs) {
+                if (a.key.trim()) attrs[a.key.trim()] = a.value.trim();
+              }
+              return {
+                attributes: attrs,
+                quantity: v.quantity,
+                unit_cost: v.unit_cost,
+                price: parseFloat(v.price) || 0,
+              };
+            }),
+            price: parseFloat(l.price) || 0,
+            cost: parseFloat(l.cost) || 0,
+          };
+          if (l.description.trim()) line.description = l.description.trim();
+          if (l.category_id) line.category_id = l.category_id;
+          if (l.discount_id) line.discount_id = l.discount_id;
+          const threshold = parseInt(l.low_stock_threshold, 10);
+          if (!isNaN(threshold) && threshold > 0) line.low_stock_threshold = threshold;
+          if (l.internal_notes.trim()) line.internal_notes = l.internal_notes.trim();
+          return line;
+        }),
+        bill_reference: billReference.trim() || null,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        notes: notes.trim() || null,
+      };
+      const res = await vendorsApi.manualReceipt(vendorId, payload as never);
+      setResult(res);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create purchase order";
+      setError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [vendorId, lines, billReference, dueDate, notes, isValid]);
+
+  if (result) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+        <div className="relative w-full max-w-md bg-surface-container-high rounded-2xl border border-outline-variant shadow-2xl animate-scale-in p-6 space-y-5 text-center">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-full bg-secondary/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[36px] text-secondary">check_circle</span>
+            </div>
+          </div>
+          <div>
+            <p className="text-lg font-bold text-on-surface">Purchase Order Created!</p>
+            <p className="text-sm text-on-surface-variant mt-1">
+              {result.new_products_created > 0 && `${result.new_products_created} new product(s) added \u2022 `}
+              Bill of {fmt(result.bill.amount)} saved
+            </p>
+          </div>
+          <div className="bg-surface-container-low rounded-xl p-4 text-left space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">PO #{result.purchase_order.id.slice(0, 8)}</span>
+              <span className="font-data-table text-on-surface font-bold">{result.purchase_order.status}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">Bill amount</span>
+              <span className="font-data-table font-bold text-on-surface">{fmt(result.bill.amount)}</span>
+            </div>
+            {result.new_products_created > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-on-surface-variant">New products</span>
+                <span className="font-data-table font-bold text-on-surface">{result.new_products_created}</span>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => onDone(result)}
+            className="px-6 py-2.5 rounded-lg bg-primary text-on-primary text-sm font-bold"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="relative w-full max-w-3xl max-h-[95vh] bg-surface-container-high rounded-2xl border border-outline-variant shadow-2xl flex flex-col animate-scale-in">
+        <div className="shrink-0 px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+          <div>
+            <h3 className="font-headline-sm text-headline-sm text-on-surface">
+              {readOnly ? "Purchase Order Details" : isReopen ? "Edit Purchase Order" : "Create Purchase Order"}
+            </h3>
+            <p className="text-[11px] text-on-surface-variant mt-0.5">{vendorName}</p>
+          </div>
+          <button onClick={onClose} disabled={submitting} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant disabled:opacity-30">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <fieldset disabled={readOnly} className="flex-1 overflow-y-auto p-6 space-y-6 min-w-0">
+          {lines.map((line, li) => (
+            <div key={line.id} className="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Line {li + 1}</span>
+                {!readOnly && lines.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeLine(line.id)}
+                    className="text-[11px] text-error flex items-center gap-1 hover:bg-error/10 px-2 py-1 rounded-lg transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-xs">remove</span>
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="Product Name *">
+                  <input
+                    value={line.product_name}
+                    onChange={(e) => updateLine(line.id, { product_name: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                    placeholder="Product name"
+                  />
+                </Field>
+                <Field label="Raw Name (optional)">
+                  <input
+                    value={line.raw_name}
+                    onChange={(e) => updateLine(line.id, { raw_name: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                    placeholder="Original AI text"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Description (optional)">
+                <input
+                  value={line.description}
+                  onChange={(e) => updateLine(line.id, { description: e.target.value })}
+                  className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                  placeholder="Product description"
+                />
+              </Field>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Field label="Selling Price">
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={line.price}
+                      onChange={(e) => updateLine(line.id, { price: e.target.value })}
+                      className="w-full h-9 pl-5 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </Field>
+                <Field label="Cost">
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={line.cost}
+                      onChange={(e) => updateLine(line.id, { cost: e.target.value })}
+                      className="w-full h-9 pl-5 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </Field>
+                <Field label="Low Stock Threshold">
+                  <input
+                    type="number"
+                    min="0"
+                    value={line.low_stock_threshold}
+                    onChange={(e) => updateLine(line.id, { low_stock_threshold: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                    placeholder="e.g. 10"
+                  />
+                </Field>
+                <Field label="Category">
+                  <SearchableSelect
+                    items={categories}
+                    value={line.category_id}
+                    onChange={(id) => updateLine(line.id, { category_id: id })}
+                    placeholder="Select category"
+                    loading={catLoading}
+                    error={catError}
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Discount (optional)">
+                  <SearchableSelect
+                    items={discounts.map((d) => ({ id: d.id, name: `${d.name} (${d.discount_percent}%)` }))}
+                    value={line.discount_id}
+                    onChange={(id) => updateLine(line.id, { discount_id: id })}
+                    placeholder="No discount"
+                    loading={discLoading}
+                    error={discError}
+                  />
+                </Field>
+                <Field label="Internal Notes (optional)">
+                  <input
+                    value={line.internal_notes}
+                    onChange={(e) => updateLine(line.id, { internal_notes: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                    placeholder="Internal notes"
+                  />
+                </Field>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2 border-t border-outline-variant/40">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={line.is_variant_group}
+                    onChange={(e) => updateLine(line.id, { is_variant_group: e.target.checked })}
+                    className="w-4 h-4 rounded border-outline/50 bg-surface-container-high text-primary focus:ring-primary"
+                  />
+                  <span className="text-xs text-on-surface-variant font-medium">Has Variants</span>
+                </label>
+              </div>
+
+              {line.is_variant_group ? (
+                <div className="space-y-3 pl-2 border-l-2 border-primary/30">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Variants</span>
+                    <button
+                      type="button"
+                      onClick={() => addVariant(line.id)}
+                      className="text-[11px] text-primary flex items-center gap-1 hover:bg-primary/10 px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-xs">add</span>
+                      Add Variant
+                    </button>
+                  </div>
+                  {line.variants.map((v, vi) => (
+                    <div key={v.id} className="bg-surface-container-highest border border-outline-variant rounded-xl p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Variant {vi + 1}</span>
+                        {line.variants.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeVariant(line.id, v.id)}
+                            className="text-[10px] text-error hover:bg-error/10 px-1.5 py-0.5 rounded transition-colors"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-outline">Attributes</span>
+                          <button
+                            type="button"
+                            onClick={() => addAttribute(line.id, v.id)}
+                            className="text-[10px] text-primary flex items-center gap-0.5 hover:bg-primary/10 px-1.5 py-0.5 rounded transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[12px]">add</span>
+                            Add Attribute
+                          </button>
+                        </div>
+                        {v.attrs.length === 0 ? (
+                          <p className="text-[11px] text-outline italic">No attributes defined</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {v.attrs.map((a, ai) => (
+                              <div key={ai} className="flex items-center gap-2">
+                                <input
+                                  value={a.key}
+                                  onChange={(e) => updateAttribute(line.id, v.id, ai, { key: e.target.value })}
+                                  className="flex-1 h-8 px-2 rounded-lg border border-outline/20 bg-surface-container-low text-xs text-on-surface outline-none focus:border-primary"
+                                  placeholder="Name (e.g. Color)"
+                                />
+                                <input
+                                  value={a.value}
+                                  onChange={(e) => updateAttribute(line.id, v.id, ai, { value: e.target.value })}
+                                  className="flex-1 h-8 px-2 rounded-lg border border-outline/20 bg-surface-container-low text-xs text-on-surface outline-none focus:border-primary"
+                                  placeholder="Value (e.g. White)"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeAttribute(line.id, v.id, ai)}
+                                  className="w-6 h-6 flex items-center justify-center rounded hover:bg-error/10 text-outline hover:text-error transition-colors shrink-0"
+                                >
+                                  <span className="material-symbols-outlined text-xs">close</span>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <Field label="Qty">
+                          <input
+                            type="number"
+                            min="1"
+                            value={v.quantity}
+                            onChange={(e) => updateVariant(line.id, v.id, { quantity: parseInt(e.target.value, 10) || 1 })}
+                            className="w-full h-8 px-2 rounded-lg border border-outline/20 bg-surface-container-low text-xs text-on-surface outline-none focus:border-primary font-data-table"
+                          />
+                        </Field>
+                        <Field label="Unit Cost">
+                          <div className="relative">
+                            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-outline text-[10px]">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={v.unit_cost}
+                              onChange={(e) => updateVariant(line.id, v.id, { unit_cost: parseFloat(e.target.value) || 0 })}
+                              className="w-full h-8 pl-4 pr-2 rounded-lg border border-outline/20 bg-surface-container-low text-xs text-on-surface outline-none focus:border-primary font-data-table"
+                            />
+                          </div>
+                        </Field>
+                        <Field label="Price">
+                          <div className="relative">
+                            <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-outline text-[10px]">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={v.price}
+                              onChange={(e) => updateVariant(line.id, v.id, { price: e.target.value })}
+                              className="w-full h-8 pl-4 pr-2 rounded-lg border border-outline/20 bg-surface-container-low text-xs text-on-surface outline-none focus:border-primary font-data-table"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3 pl-2">
+                  <Field label="Quantity">
+                    <input
+                      type="number"
+                      min="1"
+                      value={line.variants[0]?.quantity ?? 1}
+                      onChange={(e) => updateVariant(line.id, line.variants[0]?.id ?? "", { quantity: parseInt(e.target.value, 10) || 1 })}
+                      className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                    />
+                  </Field>
+                  <Field label="Unit Cost">
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.variants[0]?.unit_cost ?? 0}
+                        onChange={(e) => updateVariant(line.id, line.variants[0]?.id ?? "", { unit_cost: parseFloat(e.target.value) || 0 })}
+                        className="w-full h-9 pl-5 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                      />
+                    </div>
+                  </Field>
+                  <Field label="Price">
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.variants[0]?.price ?? ""}
+                        onChange={(e) => updateVariant(line.id, line.variants[0]?.id ?? "", { price: e.target.value })}
+                        className="w-full h-9 pl-5 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </Field>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={addLine}
+              className="w-full py-3 rounded-xl border-2 border-dashed border-outline/30 text-sm text-outline hover:border-primary/40 hover:text-primary transition-colors flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-sm">add</span>
+              Add Product Line
+            </button>
+          )}
+
+          <div className="flex justify-end text-sm font-bold text-on-surface font-data-table border-t border-outline-variant pt-3">
+            Total: {fmt(totalCost)}
+          </div>
+
+          <div className="space-y-4 border-t border-outline-variant pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Bill Reference (optional)">
+                <input
+                  value={billReference}
+                  onChange={(e) => setBillReference(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                  placeholder="e.g. INV-001"
+                />
+              </Field>
+              <Field label="Due Date (optional)">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                />
+              </Field>
+              <Field label="Notes (optional)">
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                  placeholder="Monthly restock"
+                />
+              </Field>
+            </div>
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-error/10 text-sm text-error">
+              <span className="material-symbols-outlined text-sm shrink-0 mt-0.5">error</span>
+              <span>{error}</span>
+            </div>
+          )}
+        </fieldset>
+
+        <div className="shrink-0 px-6 py-4 border-t border-outline-variant flex items-center justify-between">
+          <p className="text-xs text-on-surface-variant">
+            {lines.length} product line{lines.length !== 1 ? "s" : ""} &middot; {fmt(totalCost)} total
+          </p>
+          <div className="flex gap-3">
+            {readOnly ? (
+              <button onClick={onClose} className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold">
+                Close
+              </button>
+            ) : (
+              <>
+                <button onClick={onClose} disabled={submitting} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!isValid || submitting}
+                  className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      {isReopen ? "Confirming..." : "Creating..."}
+                    </>
+                  ) : (
+                    isReopen ? "Confirm Purchase Order" : "Create Purchase Order"
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+</file>
+
+<file path="components/CreateVendorModal.tsx">
+"use client";
+
+import { useState } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+import type { CreateVendorRequest } from "@/features/vendors/types";
+
+interface CreateVendorModalProps {
+  onCreated: () => void;
+}
+
+export default function CreateVendorModal({ onCreated }: CreateVendorModalProps) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [terms, setTerms] = useState("30");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    if (!name.trim()) { setError("Name is required"); return; }
+    setError("");
+    setSubmitting(true);
+    try {
+      const body: CreateVendorRequest = { name: name.trim() };
+      if (contactName.trim()) body.contact_name = contactName.trim();
+      if (contactEmail.trim()) body.contact_email = contactEmail.trim();
+      if (contactPhone.trim()) body.contact_phone = contactPhone.trim();
+      const t = parseInt(terms, 10);
+      if (t > 0) body.payment_terms_days = t;
+      await vendorsApi.create(body);
+      setOpen(false);
+      setName(""); setContactName(""); setContactEmail(""); setContactPhone(""); setTerms("30");
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create vendor");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="px-5 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-sm hover:brightness-110 transition-all flex items-center gap-2 active:scale-95">
+        <span className="material-symbols-outlined text-sm">add</span>
+        New Vendor
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md bg-surface-container-high rounded-2xl border border-outline-variant shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+              <h3 className="font-headline-sm text-headline-sm text-on-surface">New Vendor</h3>
+              <button onClick={() => setOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <Field label="Name *">
+                <input value={name} onChange={(e) => setName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="Acme Supplies" />
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Contact Name">
+                  <input value={contactName} onChange={(e) => setContactName(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="John Doe" />
+                </Field>
+                <Field label="Payment Terms (days)">
+                  <input type="number" min="0" value={terms} onChange={(e) => setTerms(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" />
+                </Field>
+              </div>
+              <Field label="Contact Email">
+                <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="john@acme.com" />
+              </Field>
+              <Field label="Contact Phone">
+                <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="+1234567890" />
+              </Field>
+              {error && <p className="text-sm text-error bg-error/10 px-3 py-2 rounded-lg">{error}</p>}
+            </div>
+            <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3">
+              <button onClick={() => setOpen(false)} disabled={submitting} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">Cancel</button>
+              <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+                {submitting && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+</file>
+
+<file path="components/DeactivateVendor.tsx">
+import { useState } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+
+interface DeactivateVendorProps {
+  vendorId: string;
+  onDone: () => void;
+}
+
+export default function DeactivateVendor({ vendorId, onDone }: DeactivateVendorProps) {
+  const [confirm, setConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!confirm) {
+    return (
+      <button onClick={() => setConfirm(true)} className="px-3 py-1.5 rounded-lg border border-error/30 text-error text-[10px] font-bold hover:bg-error/10 transition-colors">
+        Deactivate
+      </button>
+    );
+  }
+
+  async function handleConfirm() {
+    setLoading(true);
+    setError("");
+    try {
+      await vendorsApi.deactivate(vendorId);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to deactivate");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[10px] text-error">{error || "This is a soft delete \u2014 no data is lost. Confirm?"}</span>
+      <button onClick={handleConfirm} disabled={loading} className="px-3 py-1.5 rounded-lg bg-error text-on-error text-[10px] font-bold disabled:opacity-50 flex items-center gap-1">
+        {loading && <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>}
+        Yes
+      </button>
+      <button onClick={() => setConfirm(false)} className="px-3 py-1.5 rounded-lg border border-outline-variant text-[10px] text-on-surface-variant">No</button>
+    </div>
+  );
+}
+</file>
+
+<file path="components/OutstandingBillsWidget.tsx">
+"use client";
+
+import { useState, useEffect } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+import type { OutstandingBill } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+import { formatDate, isOverdue } from "./utils";
+
+export default function OutstandingBillsWidget() {
+  const [bills, setBills] = useState<OutstandingBill[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    vendorsApi.listOutstandingBills()
+      .then(setBills)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 animate-pulse space-y-3">
+        <div className="h-4 w-32 rounded bg-surface-container-highest/60" />
+        <div className="h-12 rounded bg-surface-container-highest/40" />
+        <div className="h-12 rounded bg-surface-container-highest/40" />
+      </div>
+    );
+  }
+
+  if (bills.length === 0) return null;
+
+  return (
+    <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="material-symbols-outlined text-sm text-error">priority_high</span>
+        <h4 className="text-[10px] font-bold uppercase tracking-wider text-outline">Bills Due Soon ({bills.length})</h4>
+      </div>
+      <div className="space-y-2">
+        {bills.slice(0, 10).map((b) => {
+          const overdue = isOverdue(b.due_date, b.status);
+          return (
+            <div key={b.id} className={`flex items-center justify-between rounded-lg px-4 py-2.5 text-xs ${overdue ? "bg-error/5 border border-error/10" : "bg-surface-container-highest"}`}>
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <span className="text-on-surface-variant truncate max-w-[120px]">{b.vendor_name}</span>
+                <span className="text-outline">{b.bill_reference || b.id.slice(0, 8)}</span>
+                {b.due_date && (
+                  <span className={`text-[10px] ${overdue ? "text-error font-semibold" : "text-outline"}`}>
+                    {overdue ? "OVERDUE" : `Due ${formatDate(b.due_date)}`}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-outline">{fmt(b.amount_remaining)} left</span>
+                <span className={`font-data-table font-bold ${overdue ? "text-error" : "text-on-surface"}`}>{fmt(b.amount)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/PayBillModal.tsx">
+import { useState } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+import type { BillResponse, PayBillRequest } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+
+interface PayBillModalProps {
+  vendorId: string;
+  bill: BillResponse;
+  onDone: () => void;
+}
+
+export default function PayBillModal({ vendorId, bill, onDone }: PayBillModalProps) {
+  const [open, setOpen] = useState(false);
+  const remVal = parseFloat(bill.amount_remaining || "0");
+  const [amount, setAmount] = useState(String(remVal));
+  const [method, setMethod] = useState("DIGITAL");
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit() {
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { setError("Amount must be greater than 0"); return; }
+    if (amt > remVal) { setError(`Amount exceeds remaining balance of ${fmt(bill.amount_remaining)}`); return; }
+    setError("");
+    setSubmitting(true);
+    try {
+      const body: PayBillRequest = { amount: amt, payment_method: method };
+      if (notes.trim()) body.notes = notes.trim();
+      await vendorsApi.payBill(vendorId, bill.id, body);
+      setOpen(false);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Payment failed");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold hover:bg-primary/20 transition-all">
+        Pay {fmt(bill.amount_remaining)}
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+          <div className="relative w-full max-w-sm bg-surface-container-high rounded-2xl border border-outline-variant shadow-2xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+              <h3 className="font-headline-sm text-headline-sm text-on-surface">Pay Bill</h3>
+              <button onClick={() => setOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-surface-container-low rounded-xl p-3 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-on-surface-variant">{bill.bill_reference || `#${bill.id.slice(0, 8)}`}</span>
+                  <p className="text-[10px] text-outline mt-0.5">{fmt(bill.amount_remaining)} remaining</p>
+                </div>
+                <span className="font-data-table text-on-surface">{fmt(bill.amount)}</span>
+              </div>
+              <Field label="Payment Amount">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">$</span>
+                  <input type="number" step="0.01" min="0.01" max={remVal} value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full h-10 pl-7 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" />
+                </div>
+              </Field>
+              <Field label="Payment Method">
+                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary">
+                  <option value="CASH">Cash</option>
+                  <option value="DIGITAL">Digital</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                </select>
+              </Field>
+              <Field label="Notes (optional)">
+                <input value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="Payment completed" />
+              </Field>
+              {error && <p className="text-sm text-error bg-error/10 px-3 py-2 rounded-lg">{error}</p>}
+            </div>
+            <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3">
+              <button onClick={() => setOpen(false)} disabled={submitting} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">Cancel</button>
+              <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2 rounded-lg bg-error text-on-error text-sm font-bold flex items-center gap-2 disabled:opacity-50">
+                {submitting && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
+                Pay {fmt(parseFloat(amount) || 0)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+</file>
+
+<file path="components/ProgressBar.tsx">
+interface ProgressBarProps {
+  paid: string | number | null;
+  total: string | number | null;
+  status: string;
+}
+
+export default function ProgressBar({ paid, total, status }: ProgressBarProps) {
+  const pPaid = paid == null ? 0 : (typeof paid === "string" ? parseFloat(paid) : paid);
+  const pTotal = total == null ? 0 : (typeof total === "string" ? parseFloat(total) : total);
+  const pct = pTotal > 0 ? Math.min(pPaid / pTotal, 1) : 0;
+  const color = status === "PAID" ? "bg-secondary" : status === "OVERDUE" ? "bg-error" : pct > 0 ? "bg-[#d99c00]" : "bg-outline/30";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full bg-outline/10 overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct * 100}%` }} />
+      </div>
+      <span className="text-[10px] font-data-table text-outline min-w-[3rem] text-right">
+        {Math.round(pct * 100)}%
+      </span>
+    </div>
+  );
+}
+</file>
+
+<file path="components/ReceiptIngestionModal.tsx">
+"use client";
+
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { vendorsApi } from "@/features/vendors/api";
+import { fmt, ACCEPTED_MIME_TYPES, ACCEPTED_EXTENSIONS, MAX_FILE_SIZE } from "@/features/vendors/types";
+import type {
+  ReviewLineState,
+  ReviewVariantState,
+  ReceiptIngestionStep,
+  ConfirmedReceiptLine,
+} from "@/features/vendors/types";
+
+interface ExistingPOLine {
+  variant_id: string;
+  quantity: number;
+  unit_cost: string;
+  product_name: string;
+  attributes: Record<string, string>;
+  price: string;
+}
+
+interface ReceiptIngestionModalProps {
+  vendorId: string;
+  vendorName: string;
+  onClose: () => void;
+  onDone: () => void;
+  existingPO?: {
+    lines: ExistingPOLine[];
+    notes?: string | null;
+  };
+}
+
+export default function ReceiptIngestionModal({ vendorId, vendorName, onClose, onDone, existingPO }: ReceiptIngestionModalProps) {
+  const [step, setStep] = useState<ReceiptIngestionStep>(existingPO ? "review" : "upload");
+  const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [source, setSource] = useState<"image" | "excel" | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const [lines, setLines] = useState<ReviewLineState[]>([]);
+  const [totalCost, setTotalCost] = useState("0.00");
+  const [extractionNotes, setExtractionNotes] = useState<string | null>(null);
+  const [newProductsCount, setNewProductsCount] = useState(0);
+
+  const [billReference, setBillReference] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const [processing, setProcessing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+  const [confirmResult, setConfirmResult] = useState<{ billAmount: string; newProducts: number } | null>(null);
+
+  useEffect(() => {
+    if (!existingPO) return;
+    const seen = new Map<string, { name: string; variants: ExistingPOLine[] }>();
+    for (const l of existingPO.lines) {
+      const key = l.product_name;
+      if (!seen.has(key)) {
+        seen.set(key, { name: key, variants: [] });
+      }
+      seen.get(key)!.variants.push(l);
+    }
+    setLines(Array.from(seen.values()).map((g) => ({
+      raw_name: "",
+      product_name: g.name,
+      is_variant_group: g.variants.length > 1 || Object.keys(g.variants[0]?.attributes || {}).length > 0,
+      matched_product_id: null,
+      is_new_product: false,
+      variants: g.variants.map((v) => ({
+        attributes: v.attributes,
+        quantity: v.quantity,
+        unit_cost: parseFloat(v.unit_cost),
+        price: v.price || "",
+      })),
+      price: "",
+      cost: "",
+      description: "",
+      category_id: "",
+      low_stock_threshold: "",
+      internal_notes: "",
+    })));
+    if (existingPO.notes) setNotes(existingPO.notes);
+  }, [existingPO]);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const liveTotal = useMemo(() => {
+    return lines.reduce((sum, line) =>
+      sum + line.variants.reduce((s, v) => s + v.quantity * v.unit_cost, 0), 0);
+  }, [lines]);
+
+  const allVariantsValid = useMemo(() => {
+    if (lines.length === 0) return false;
+    return lines.every((line) =>
+      line.variants.length > 0 && line.variants.every((v) => {
+        const c = v.unit_cost;
+        const p = parseFloat(v.price);
+        return c > 0 && !isNaN(p) && p > 0;
+      })
+    );
+  }, [lines]);
+
+  const liveNewProductCount = useMemo(() => {
+    return lines.filter((l) => l.is_new_product).length;
+  }, [lines]);
+
+  function acceptFile(f: File): boolean {
+    setError("");
+    if (f.size > MAX_FILE_SIZE) {
+      setError("File exceeds 10MB limit. Please choose a smaller file.");
+      return false;
+    }
+    if (!ACCEPTED_MIME_TYPES.includes(f.type)) {
+      setError(`Invalid file type. Accepted: ${ACCEPTED_EXTENSIONS}`);
+      return false;
+    }
+    setFile(f);
+    if (f.type.startsWith("image/")) {
+      if (filePreview) URL.revokeObjectURL(filePreview);
+      setFilePreview(URL.createObjectURL(f));
+      setSource("image");
+    } else {
+      if (filePreview) URL.revokeObjectURL(filePreview);
+      setFilePreview(null);
+      setSource("excel");
+    }
+    return true;
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) acceptFile(f);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) acceptFile(f);
+  }
+
+  const handleProcess = useCallback(async () => {
+    if (!file) return;
+    setProcessing(true);
+    setError("");
+    try {
+      const result = await vendorsApi.processReceipt(vendorId, file);
+      setLines(
+        result.lines.map((l) => ({
+          raw_name: l.raw_name,
+          product_name: l.product_name,
+          is_variant_group: l.is_variant_group,
+          matched_product_id: l.matched_product_id,
+          is_new_product: l.is_new_product,
+          variants: l.variants.length > 0
+            ? l.variants.map((v) => ({
+                attributes: v.attributes,
+                quantity: v.quantity ?? 1,
+                unit_cost: v.unit_cost ?? 0,
+                price: String(v.unit_cost || 0),
+              }))
+            : [{ attributes: {}, quantity: 1, unit_cost: 0, price: "0" }],
+          price: String(l.price ?? l.variants[0]?.unit_cost ?? 0),
+          cost: String(l.cost ?? l.variants[0]?.unit_cost ?? 0),
+          description: "",
+          category_id: "",
+          low_stock_threshold: "",
+          internal_notes: "",
+        }))
+      );
+      setTotalCost(result.total_cost);
+      setExtractionNotes(result.extraction_notes);
+      setSource(result.source);
+      setNewProductsCount(result.lines.filter((l) => l.is_new_product).length);
+      setStep("review");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to process receipt";
+      setError(msg);
+    } finally {
+      setProcessing(false);
+    }
+  }, [file, vendorId]);
+
+  function updateLineProductName(index: number, value: string) {
+    setLines((prev) =>
+      prev.map((line, i) => (i === index ? { ...line, product_name: value } : line))
+    );
+  }
+
+  function updateVariant(lineIndex: number, variantIndex: number, field: keyof ReviewVariantState, value: string | number | Record<string, string>) {
+    setLines((prev) =>
+      prev.map((line, i) =>
+        i === lineIndex
+          ? {
+              ...line,
+              variants: line.variants.map((v, vi) =>
+                vi === variantIndex ? { ...v, [field]: value } : v
+              ),
+            }
+          : line
+      )
+    );
+  }
+
+  const handleConfirm = useCallback(async () => {
+    setConfirming(true);
+    setError("");
+    try {
+      const result = await vendorsApi.confirmReceipt(vendorId, {
+        lines: lines.map((l) => {
+          const line: ConfirmedReceiptLine = {
+            raw_name: l.raw_name,
+            product_name: l.product_name,
+            is_variant_group: l.is_variant_group,
+            matched_product_id: l.matched_product_id,
+            variants: l.variants.map((v) => ({
+              attributes: v.attributes,
+              quantity: v.quantity ?? 1,
+              unit_cost: v.unit_cost ?? 0,
+              price: parseFloat(v.price) || 0,
+            })),
+            price: parseFloat(l.price) || 0,
+            cost: parseFloat(l.cost) || 0,
+          };
+          if (l.description.trim()) line.description = l.description.trim();
+          if (l.category_id.trim()) line.category_id = l.category_id.trim();
+          const threshold = parseInt(l.low_stock_threshold, 10);
+          if (!isNaN(threshold) && threshold > 0) line.low_stock_threshold = threshold;
+          if (l.internal_notes.trim()) line.internal_notes = l.internal_notes.trim();
+          return line;
+        }),
+        bill_reference: billReference.trim() || null,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        notes: notes.trim() || null,
+      });
+      setConfirmResult({
+        billAmount: fmt(result.bill.amount),
+        newProducts: result.new_products_created,
+      });
+      setStep("confirmed");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to confirm receipt";
+      setError(`${msg}. If the error persists, check vendor bills for duplicates before retrying.`);
+    } finally {
+      setConfirming(false);
+    }
+  }, [vendorId, lines, billReference, dueDate, notes]);
+
+  function resetAndClose() {
+    if (filePreview) URL.revokeObjectURL(filePreview);
+    onClose();
+    onDone();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => e.preventDefault()}
+    >
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className={`relative bg-surface-container-high rounded-2xl border border-outline-variant shadow-2xl flex flex-col animate-scale-in ${
+        step === "review" ? "w-full max-w-3xl max-h-[90vh]" : "w-full max-w-md"
+      }`} onClick={(e) => e.stopPropagation()}>
+
+        {/* ─── HEADER ─── */}
+        <div className="shrink-0 px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+          <div>
+            <h3 className="font-headline-sm text-headline-sm text-on-surface">
+              {step === "upload" && "Upload Receipt"}
+              {step === "review" && "Review Receipt Lines"}
+              {step === "confirmed" && "Receipt Confirmed"}
+            </h3>
+            <p className="text-[11px] text-on-surface-variant mt-0.5">{vendorName}</p>
+          </div>
+          <button onClick={resetAndClose} disabled={processing || confirming} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant disabled:opacity-30">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        {/* ─── STEP: UPLOAD ─── */}
+        {step === "upload" && (
+          <div className="p-6 space-y-5">
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+                isDragOver
+                  ? "border-primary bg-primary/5"
+                  : "border-outline/30 hover:border-primary/40"
+              }`}
+            >
+              {filePreview ? (
+                <img src={filePreview} alt="Receipt preview" className="max-h-48 mx-auto rounded-lg object-contain" />
+              ) : file ? (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="material-symbols-outlined text-[40px] text-primary">description</span>
+                  <p className="text-sm text-on-surface font-medium">{file.name}</p>
+                  <p className="text-[11px] text-outline">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <span className="material-symbols-outlined text-[40px] text-outline">cloud_upload</span>
+                  <p className="text-sm text-on-surface font-medium">Drop a receipt here or click to browse</p>
+                  <p className="text-[11px] text-outline">Accepts {ACCEPTED_EXTENSIONS} (max 10MB)</p>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ACCEPTED_EXTENSIONS}
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-error/10 text-sm text-error">
+                <span className="material-symbols-outlined text-sm shrink-0 mt-0.5">error</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button onClick={onClose} disabled={processing} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">Cancel</button>
+              <button
+                onClick={handleProcess}
+                disabled={!file || processing}
+                className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+              >
+                {processing ? (
+                  <>
+                    <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                    Reading your receipt...
+                  </>
+                ) : (
+                  "Upload & Process"
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── STEP: REVIEW ─── */}
+        {step === "review" && (
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {extractionNotes && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-[#d99c00]/10 text-sm text-[#d99c00] border border-[#d99c00]/20">
+                <span className="material-symbols-outlined text-sm shrink-0 mt-0.5">info</span>
+                <span>AI note: {extractionNotes}</span>
+              </div>
+            )}
+
+            {lines.map((line, li) => {
+              const lineTotal = line.variants.reduce((s, v) => s + v.quantity * v.unit_cost, 0);
+              return (
+                <div key={li} className="bg-surface-container-low border border-outline-variant rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1">
+                      {existingPO ? (
+                        <p className="text-sm text-on-surface font-semibold py-0.5">{line.product_name}</p>
+                      ) : (
+                        <input
+                          value={line.product_name}
+                          onChange={(e) => updateLineProductName(li, e.target.value)}
+                          className="w-full bg-transparent border-b border-transparent hover:border-outline/30 focus:border-primary text-sm text-on-surface font-semibold outline-none py-0.5"
+                        />
+                      )}
+                      {line.raw_name && <p className="text-[10px] text-outline mt-0.5">Raw: {line.raw_name}</p>}
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      {line.is_new_product ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-[#d99c00]/10 text-[#d99c00] border-[#d99c00]/20">
+                          New Product
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-secondary/10 text-secondary border-secondary/20">
+                          Matched
+                        </span>
+                      )}
+                      {line.is_variant_group && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-primary/10 text-primary border-primary/20">
+                          Variant Group
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {line.variants.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-outline-variant/50">
+                            {line.is_variant_group && (
+                              <th className="text-[10px] font-bold uppercase tracking-wider text-outline pb-2 pr-2">Attributes</th>
+                            )}
+                            <th className="text-[10px] font-bold uppercase tracking-wider text-outline pb-2 pr-2 w-[70px]">Qty</th>
+                            <th className="text-[10px] font-bold uppercase tracking-wider text-outline pb-2 pr-2 w-[90px]">Cost</th>
+                            <th className="text-[10px] font-bold uppercase tracking-wider text-outline pb-2 w-[120px]">Price</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/30">
+                          {line.variants.map((v, vi) => {
+                            const attrStr = Object.entries(v.attributes)
+                              .map(([k, val]) => `${k}: ${val}`)
+                              .join(", ");
+                            const vTotal = v.quantity * v.unit_cost;
+                            return (
+                              <tr key={vi}>
+                                {line.is_variant_group && (
+                                  <td className="py-2 pr-2">
+                                    <span className="text-[11px] text-on-surface-variant">{attrStr}</span>
+                                  </td>
+                                )}
+                                <td className="py-2 pr-2">
+                                  {existingPO ? (
+                                    <span className="text-sm text-on-surface font-data-table py-0.5 block">{v.quantity}</span>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={v.quantity}
+                                      onChange={(e) => updateVariant(li, vi, "quantity", parseInt(e.target.value, 10) || 1)}
+                                      className="w-full bg-transparent border-b border-transparent hover:border-outline/30 focus:border-primary text-sm text-on-surface outline-none py-0.5 font-data-table"
+                                    />
+                                  )}
+                                </td>
+                                <td className="py-2 pr-2">
+                                  {existingPO ? (
+                                    <span className="text-sm text-on-surface font-data-table py-0.5 block">${fmt(v.unit_cost)}</span>
+                                  ) : (
+                                    <div className="relative">
+                                      <span className="absolute left-0 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={v.unit_cost}
+                                        onChange={(e) => updateVariant(li, vi, "unit_cost", parseFloat(e.target.value) || 0)}
+                                        className="w-full pl-4 bg-transparent border-b border-transparent hover:border-outline/30 focus:border-primary text-sm text-on-surface outline-none py-0.5 font-data-table"
+                                      />
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-2">
+                                  {existingPO ? (
+                                    <span className={`text-sm font-data-table py-0.5 block ${v.price ? "text-on-surface" : "text-outline"}`}>
+                                      {v.price ? `$${fmt(parseFloat(v.price))}` : "-"}
+                                    </span>
+                                  ) : (
+                                    <div className="relative">
+                                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={v.price}
+                                        onChange={(e) => updateVariant(li, vi, "price", e.target.value)}
+                                        placeholder="Set price"
+                                        className={`w-full pl-5 bg-surface-container-lowest border rounded-lg py-2 text-sm outline-none font-data-table transition-colors ${
+                                          v.price && parseFloat(v.price) > 0
+                                            ? "border-primary/40 text-on-surface focus:border-primary"
+                                            : "border-error/30 text-outline focus:border-primary"
+                                        }`}
+                                      />
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end text-[11px] text-outline font-data-table border-t border-outline-variant/40 pt-2">
+                    Line total: {fmt(lineTotal)}
+                  </div>
+
+                  {!existingPO && (
+                    <div className="border-t border-outline-variant/40 pt-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <BillField label="Product Price (selling)">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={line.price}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setLines((prev) =>
+                                  prev.map((l, i) => (i === li ? { ...l, price: val } : l))
+                                );
+                              }}
+                              className="w-full h-9 pl-5 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </BillField>
+                        <BillField label="Product Cost">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={line.cost}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setLines((prev) =>
+                                  prev.map((l, i) => (i === li ? { ...l, cost: val } : l))
+                                );
+                              }}
+                              className="w-full h-9 pl-5 pr-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                              placeholder="0.00"
+                            />
+                          </div>
+                        </BillField>
+                      </div>
+                      <BillField label="Description (optional)">
+                        <input
+                          value={line.description}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLines((prev) =>
+                              prev.map((l, i) => (i === li ? { ...l, description: val } : l))
+                            );
+                          }}
+                          className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                          placeholder="Product description"
+                        />
+                      </BillField>
+                      <div className="grid grid-cols-2 gap-3">
+                        <BillField label="Category ID (optional)">
+                          <input
+                            value={line.category_id}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLines((prev) =>
+                                prev.map((l, i) => (i === li ? { ...l, category_id: val } : l))
+                              );
+                            }}
+                            className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                            placeholder="UUID or leave blank"
+                          />
+                        </BillField>
+                        <BillField label="Low Stock Threshold (optional)">
+                          <input
+                            type="number"
+                            min="0"
+                            value={line.low_stock_threshold}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setLines((prev) =>
+                                prev.map((l, i) => (i === li ? { ...l, low_stock_threshold: val } : l))
+                              );
+                            }}
+                            className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                            placeholder="e.g. 10"
+                          />
+                        </BillField>
+                      </div>
+                      <BillField label="Internal Notes (optional)">
+                        <input
+                          value={line.internal_notes}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setLines((prev) =>
+                              prev.map((l, i) => (i === li ? { ...l, internal_notes: val } : l))
+                            );
+                          }}
+                          className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary"
+                          placeholder="Stock from Acme PO"
+                        />
+                      </BillField>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="flex justify-end text-sm font-bold text-on-surface font-data-table border-t border-outline-variant pt-3">
+              Total: {fmt(liveTotal)}
+            </div>
+
+            <div className="space-y-4 border-t border-outline-variant pt-4">
+              <BillField label="Bill Reference (optional)">
+                <input value={billReference} onChange={(e) => setBillReference(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder="e.g. INV-001" />
+              </BillField>
+              <div className="grid grid-cols-2 gap-3">
+                <BillField label="Due Date (optional)">
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" />
+                </BillField>
+                <div />
+              </div>
+              <BillField label="Notes (optional)">
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary resize-none" placeholder="Optional notes" />
+              </BillField>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-error/10 text-sm text-error">
+                <span className="material-symbols-outlined text-sm shrink-0 mt-0.5">error</span>
+                <span>{error}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── STEP: CONFIRMED ─── */}
+        {step === "confirmed" && confirmResult && (
+          <div className="p-6 space-y-5 text-center">
+            <div className="flex justify-center">
+              <div className="w-16 h-16 rounded-full bg-secondary/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[36px] text-secondary">check_circle</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-on-surface">Receipt confirmed!</p>
+              <p className="text-sm text-on-surface-variant mt-1">
+                {confirmResult.newProducts > 0 && `${confirmResult.newProducts} new product(s) added to your catalog`}
+                {confirmResult.newProducts > 0 && " \u2022 "}
+                Bill of {confirmResult.billAmount} saved
+              </p>
+            </div>
+            <div className="bg-surface-container-low rounded-xl p-4 text-left space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-on-surface-variant">Bill amount</span>
+                <span className="font-data-table font-bold text-on-surface">{confirmResult.billAmount}</span>
+              </div>
+              {confirmResult.newProducts > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-on-surface-variant">New products created</span>
+                  <span className="font-data-table font-bold text-on-surface">{confirmResult.newProducts}</span>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-outline">Pay the bill anytime from the vendor&apos;s bills page</p>
+          </div>
+        )}
+
+        {/* ─── FOOTER ─── */}
+        {step === "upload" && null /* footer in body */}
+        {step === "review" && (
+          <div className="shrink-0 px-6 py-4 border-t border-outline-variant flex flex-col items-end gap-2">
+            {!existingPO && (
+              <p className="text-xs text-on-surface-variant">
+                This will create a bill of {fmt(liveTotal)}
+                {liveNewProductCount > 0 && ` and add ${liveNewProductCount} new product(s)`}
+              </p>
+            )}
+            <div className="flex gap-3">
+              {existingPO ? (
+                <button onClick={resetAndClose} className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold">
+                  Close
+                </button>
+              ) : (
+                <>
+                  <button onClick={onClose} disabled={confirming} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">Cancel</button>
+                  <button
+                    onClick={handleConfirm}
+                    disabled={!allVariantsValid || confirming}
+                    className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {confirming ? (
+                      <>
+                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        Creating purchase order and bill...
+                      </>
+                    ) : (
+                      "Confirm Receipt"
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {step === "confirmed" && (
+          <div className="shrink-0 px-6 py-4 border-t border-outline-variant flex justify-end">
+            <button onClick={resetAndClose} className="px-5 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold">
+              View Vendor Bills
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BillField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+</file>
+
+<file path="components/StatCards.tsx">
+import { fmt } from "@/features/vendors/types";
+
+interface StatCardsProps {
+  totalVendors: number;
+  totalOutstanding: number;
+  avgBalance: number;
+  withBalance: number;
+}
+
+export default function StatCards({ totalVendors, totalOutstanding, avgBalance, withBalance }: StatCardsProps) {
+  const stats = [
+    { label: "Total Vendors", value: String(totalVendors), icon: "conveyor_belt", color: "text-primary" },
+    { label: "Outstanding", value: fmt(totalOutstanding), icon: "account_balance", color: "text-error" },
+    { label: "Avg Balance", value: fmt(avgBalance), icon: "trending_up", color: "text-secondary" },
+    { label: "With Balance", value: String(withBalance), icon: "receipt_long", color: "text-primary-fixed-dim" },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {stats.map((s) => (
+        <div key={s.label} className="bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className={`material-symbols-outlined text-sm ${s.color}`}>{s.icon}</span>
+            <span className="text-[10px] text-outline font-medium">{s.label}</span>
+          </div>
+          <span className={`font-data-table text-lg font-bold ${s.color}`}>{s.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+</file>
+
+<file path="components/StatusBadge.tsx">
+interface StatusBadgeProps {
+  status: string;
+  size?: "sm" | "md";
+}
+
+const statusStyles: Record<string, string> = {
+  PENDING: "bg-[#d99c00]/10 text-[#d99c00] border-[#d99c00]/20",
+  RECEIVED: "bg-secondary/10 text-secondary border-secondary/20",
+  UNPAID: "bg-outline/10 text-outline border-outline/20",
+  PARTIALLY_PAID: "bg-[#d99c00]/10 text-[#d99c00] border-[#d99c00]/20",
+  PAID: "bg-secondary/10 text-secondary border-secondary/20",
+  OVERDUE: "bg-error/10 text-error border-error/20",
+};
+
+export default function StatusBadge({ status, size = "sm" }: StatusBadgeProps) {
+  const base = statusStyles[status] || "bg-outline/10 text-outline border-outline/20";
+  const textSize = size === "sm" ? "text-[10px]" : "text-xs";
+  return (
+    <span className={`${textSize} font-bold px-2 py-0.5 rounded-full border ${base}`}>
+      {status === "PARTIALLY_PAID" ? "Partial" : status.charAt(0) + status.slice(1).toLowerCase()}
+    </span>
+  );
+}
+</file>
+
+<file path="components/utils.ts">
+import type { VendorResponse } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+
+export function formatDate(iso: string | null): string {
+  if (!iso) return "\u2014";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function formatDateTime(iso: string | null): string {
+  if (!iso) return "\u2014";
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+export function daysUntil(dueDate: string | null): number {
+  if (!dueDate) return Infinity;
+  const now = new Date();
+  const due = new Date(dueDate);
+  return Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export function isOverdue(dueDate: string | null, status: string): boolean {
+  if (status === "PAID" || !dueDate) return false;
+  return daysUntil(dueDate) < 0;
+}
+
+export function getBalance(v: VendorResponse): number {
+  return v.outstanding_balance ? parseFloat(v.outstanding_balance) : 0;
+}
+</file>
+
+<file path="components/VendorBillsTab.tsx">
+"use client";
+
+import { useState, useEffect } from "react";
+import type { BillResponse, PurchaseOrderResponse } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+import { vendorsApi } from "@/features/vendors/api";
+import { productsApi } from "@/features/products/api";
+import { formatDate, isOverdue } from "./utils";
+import StatusBadge from "./StatusBadge";
+import ProgressBar from "./ProgressBar";
+import PayBillModal from "./PayBillModal";
+
+interface BillsTabProps {
+  vendorId: string;
+  bills: BillResponse[];
+  onUpdated: () => void;
+}
+
+export default function BillsTab({ vendorId, bills, onUpdated }: BillsTabProps) {
+  const [expandedBill, setExpandedBill] = useState<string | null>(null);
+  const [poData, setPoData] = useState<Record<string, { lines: { name: string; qty: number; cost: string }[]; total: number }>>({});
+  const [loadingPo, setLoadingPo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!expandedBill) return;
+    const bill = bills.find((b) => b.id === expandedBill);
+    if (!bill || !bill.po_id || poData[bill.po_id]) return;
+    setLoadingPo(bill.po_id);
+    vendorsApi.listPOs(vendorId).then(async (allPos) => {
+      const po = allPos.find((p) => p.id === bill.po_id);
+      if (!po) { setLoadingPo(null); return; }
+      const variantIds = new Set(po.lines.map((l) => l.variant_id));
+      let productMap: Record<string, string> = {};
+      try {
+        const res = await productsApi.list({ size: 1000 });
+        for (const p of res.items) {
+          if (p.variants) {
+            for (const v of p.variants) {
+              if (variantIds.has(v.id)) productMap[v.id] = p.name;
+            }
+          }
+        }
+      } catch {}
+      const total = po.lines.reduce((s, l) => s + l.quantity * parseFloat(l.unit_cost), 0);
+      setPoData((prev) => ({
+        ...prev,
+        [po.id]: {
+          total,
+          lines: po.lines.map((l) => ({
+            name: productMap[l.variant_id] || l.variant_id.slice(0, 12) + "...",
+            qty: l.quantity,
+            cost: l.unit_cost,
+          })),
+        },
+      }));
+      setLoadingPo(null);
+    }).catch(() => setLoadingPo(null));
+  }, [expandedBill, bills, vendorId, poData]);
+
+  function toggleExpand(billId: string) {
+    setExpandedBill((prev) => (prev === billId ? null : billId));
+  }
+
+  return (
+    <div className="p-5 space-y-3">
+      <p className="text-xs text-on-surface-variant">{bills.length} bill{bills.length !== 1 ? "s" : ""}</p>
+      {bills.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12">
+          <span className="material-symbols-outlined text-[40px] text-outline mb-2">receipt</span>
+          <p className="text-sm text-on-surface-variant">No bills yet</p>
+          <p className="text-xs text-outline mt-1">Bills appear after receiving a PO</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {bills.map((bill) => {
+            const overdue = isOverdue(bill.due_date, bill.status);
+            const displayStatus = overdue ? "OVERDUE" : bill.status;
+            const isExpanded = expandedBill === bill.id;
+            const poInfo = bill.po_id ? poData[bill.po_id] : null;
+            const isLoading = bill.po_id && loadingPo === bill.po_id;
+            return (
+              <div
+                key={bill.id}
+                className="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden cursor-pointer hover:border-primary/30 transition-colors"
+                onClick={() => toggleExpand(bill.id)}
+              >
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-on-surface truncate">{bill.bill_reference || `#${bill.id.slice(0, 8)}`}</span>
+                      <StatusBadge status={displayStatus} />
+                    </div>
+                    <span className="font-data-table text-sm font-bold text-on-surface shrink-0 ml-2">{fmt(bill.amount)}</span>
+                  </div>
+
+                  {(bill.status === "PAID" || bill.status === "PARTIALLY_PAID") && (
+                    <div className="mb-2">
+                      <ProgressBar paid={bill.amount_paid} total={bill.amount} status={bill.status} />
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-[11px] text-outline">
+                    <div className="flex items-center gap-3">
+                      {bill.due_date && (
+                        <span className={overdue ? "text-error font-semibold" : ""}>
+                          Due {formatDate(bill.due_date)}
+                        </span>
+                      )}
+                      {parseFloat(bill.amount_remaining || "0") > 0 && (
+                        <span className="text-error">{fmt(bill.amount_remaining)} remaining</span>
+                      )}
+                    </div>
+                    {bill.status !== "PAID" && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <PayBillModal vendorId={vendorId} bill={bill} onDone={onUpdated} />
+                      </div>
+                    )}
+                  </div>
+                  {bill.notes && <p className="text-[10px] text-outline mt-2">{bill.notes}</p>}
+                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-outline-variant/50 bg-surface-container-highest/50 px-4 py-3 space-y-2">
+                    {isLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-outline">
+                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        Loading product details...
+                      </div>
+                    ) : poInfo ? (
+                      <>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Purchase Order Lines</p>
+                        {poInfo.lines.map((line, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span className="text-on-surface-variant truncate max-w-[200px]">{line.name}</span>
+                            <span className="text-outline">{line.qty} &times; {fmt(line.cost)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs font-bold text-on-surface border-t border-outline-variant/40 pt-2">
+                          <span className="text-outline">PO Total</span>
+                          <span>{fmt(poInfo.total)}</span>
+                        </div>
+                      </>
+                    ) : bill.po_id ? (
+                      <p className="text-xs text-outline">No PO details available</p>
+                    ) : (
+                      <p className="text-xs text-outline">Manual bill (no purchase order)</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="components/VendorDetailPanel.tsx">
+"use client";
+
+import { useState, useEffect } from "react";
+import type { VendorResponse, VendorOverview, PurchaseOrderResponse, BillResponse, OutstandingBill } from "@/features/vendors/types";
+import { vendorsApi } from "@/features/vendors/api";
+import VendorOverviewTab from "./VendorOverviewTab";
+import VendorPOTab from "./VendorPOTab";
+import VendorBillsTab from "./VendorBillsTab";
+import DeactivateVendor from "./DeactivateVendor";
+import ReceiptIngestionModal from "./ReceiptIngestionModal";
+
+interface VendorDetailPanelProps {
+  vendor: VendorResponse;
+  onClose: () => void;
+  onUpdated: () => void;
+}
+
+export default function VendorDetailPanel({ vendor, onClose, onUpdated }: VendorDetailPanelProps) {
+  const [tab, setTab] = useState<"overview" | "pos" | "bills">("overview");
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [overview, setOverview] = useState<VendorOverview | null>(null);
+  const [pos, setPos] = useState<PurchaseOrderResponse[]>([]);
+  const [bills, setBills] = useState<BillResponse[]>([]);
+  const [outstandingBills, setOutstandingBills] = useState<OutstandingBill[]>([]);
+  const [loadingOverview, setLoadingOverview] = useState(true);
+
+  useEffect(() => {
+    if (tab !== "overview") return;
+    setLoadingOverview(true);
+    Promise.all([
+      vendorsApi.getOverview(vendor.id),
+      vendorsApi.listOutstandingBills(),
+    ]).then(([ov, ob]) => {
+      setOverview(ov);
+      setOutstandingBills(ob.filter((b) => b.vendor_id === vendor.id));
+    }).catch(() => {}).finally(() => setLoadingOverview(false));
+  }, [tab, vendor.id]);
+
+  useEffect(() => {
+    if (tab !== "pos") return;
+    vendorsApi.listPOs(vendor.id).then(setPos).catch(() => setPos([]));
+  }, [tab, vendor.id]);
+
+  useEffect(() => {
+    if (tab !== "bills") return;
+    vendorsApi.listVendorBills(vendor.id).then(setBills).catch(() => setBills([]));
+  }, [tab, vendor.id]);
+
+  const tabs = [
+    { key: "overview" as const, label: "Overview" },
+    { key: "pos" as const, label: "Purchase Orders" },
+    { key: "bills" as const, label: "Bills" },
+  ];
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="shrink-0 px-5 py-4 border-b border-outline-variant bg-surface-container flex items-center gap-3">
+        <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant">
+          <span className="material-symbols-outlined">arrow_back</span>
+        </button>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-headline-sm text-headline-sm text-on-surface truncate">{vendor.name}</h3>
+          <p className="text-[11px] text-on-surface-variant truncate">
+            {vendor.contact_email || vendor.contact_phone
+              ? `${vendor.contact_email || ""} ${vendor.contact_phone || ""}`.trim()
+              : "No contact info"}
+          </p>
+        </div>
+        <DeactivateVendor vendorId={vendor.id} onDone={onUpdated} />
+        <button
+          onClick={() => setShowReceiptModal(true)}
+          className="px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-[10px] font-bold hover:bg-primary/10 transition-colors flex items-center gap-1"
+        >
+          <span className="material-symbols-outlined text-xs">upload_file</span>
+          Upload Receipt
+        </button>
+      </div>
+
+      <div className="shrink-0 flex border-b border-outline-variant px-5">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-3 text-xs font-bold border-b-2 transition-colors ${
+              tab === t.key ? "border-primary text-primary" : "border-transparent text-outline hover:text-on-surface-variant"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {tab === "overview" && (
+          <VendorOverviewTab vendor={vendor} overview={overview} loading={loadingOverview} outstandingBills={outstandingBills} />
+        )}
+        {tab === "pos" && (
+          <VendorPOTab vendorId={vendor.id} vendorName={vendor.name} pos={pos} onUpdated={() => vendorsApi.listPOs(vendor.id).then(setPos)} />
+        )}
+        {tab === "bills" && (
+          <VendorBillsTab vendorId={vendor.id} bills={bills} onUpdated={() => vendorsApi.listVendorBills(vendor.id).then(setBills)} />
+        )}
+      </div>
+
+      {showReceiptModal && (
+        <ReceiptIngestionModal
+          vendorId={vendor.id}
+          vendorName={vendor.name}
+          onClose={() => setShowReceiptModal(false)}
+          onDone={() => {
+            onUpdated();
+            setTab("bills");
+            vendorsApi.listVendorBills(vendor.id).then(setBills);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="components/VendorList.tsx">
+import type { VendorResponse } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+import { getBalance } from "./utils";
+
+interface VendorListProps {
+  vendors: VendorResponse[];
+  selectedId: string | null;
+  onSelect: (v: VendorResponse) => void;
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+}
+
+export default function VendorList({ vendors, selectedId, onSelect, loading, error, onRetry }: VendorListProps) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-surface-container-low border border-outline-variant rounded-xl p-5 animate-pulse">
+            <div className="h-4 w-32 rounded bg-surface-container-highest/60 mb-3" />
+            <div className="h-3 w-24 rounded bg-surface-container-highest/40 mb-2" />
+            <div className="h-3 w-20 rounded bg-surface-container-highest/40" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <span className="material-symbols-outlined text-[48px] text-error mb-3">error</span>
+        <p className="text-sm text-error">{error}</p>
+        <button onClick={onRetry} className="mt-4 px-5 py-2 rounded-xl bg-primary text-on-primary text-sm font-bold">Retry</button>
+      </div>
+    );
+  }
+
+  if (vendors.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <span className="material-symbols-outlined text-[48px] text-outline mb-3">conveyor_belt</span>
+        <p className="text-sm text-on-surface-variant">No vendors yet</p>
+        <p className="text-xs text-outline mt-1">Create your first vendor to get started</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {vendors.map((vendor) => {
+        const bal = getBalance(vendor);
+        return (
+          <button
+            key={vendor.id}
+            onClick={() => onSelect(vendor)}
+            className={`text-left bg-surface-container-low border rounded-xl p-5 hover:border-primary/30 hover:bg-surface-container transition-all ${
+              selectedId === vendor.id ? "border-primary/40 bg-surface-container" : "border-outline-variant"
+            }`}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-on-surface text-sm truncate">{vendor.name}</p>
+                {vendor.contact_name && <p className="text-[11px] text-on-surface-variant mt-0.5">{vendor.contact_name}</p>}
+              </div>
+              {bal > 0 && (
+                <span className="shrink-0 ml-2 text-[11px] font-bold text-error font-data-table">{fmt(bal)}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-4 text-[11px] text-outline flex-wrap">
+              {vendor.contact_email && <span className="truncate max-w-[160px]">{vendor.contact_email}</span>}
+              {vendor.contact_phone && <span>{vendor.contact_phone}</span>}
+              {vendor.payment_terms_days && <span>{vendor.payment_terms_days}d terms</span>}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+</file>
+
+<file path="components/VendorOverviewTab.tsx">
+"use client";
+
+import type { VendorResponse, VendorOverview, OutstandingBill } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+import { formatDate } from "./utils";
+
+interface OverviewTabProps {
+  vendor: VendorResponse;
+  overview: VendorOverview | null;
+  loading: boolean;
+  outstandingBills: OutstandingBill[];
+}
+
+export default function OverviewTab({ vendor, overview, loading, outstandingBills }: OverviewTabProps) {
+  const bal = vendor.outstanding_balance ? parseFloat(vendor.outstanding_balance) : 0;
+  return (
+    <div className="p-5 space-y-5">
+      <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 grid grid-cols-2 gap-4">
+        <InfoRow label="Contact" value={vendor.contact_name || "\u2014"} />
+        <InfoRow label="Email" value={vendor.contact_email || "\u2014"} />
+        <InfoRow label="Phone" value={vendor.contact_phone || "\u2014"} />
+        <InfoRow label="Payment Terms" value={vendor.payment_terms_days ? `${vendor.payment_terms_days} days` : "\u2014"} />
+        <InfoRow label="Outstanding Balance" value={fmt(bal)} mono />
+        <InfoRow label="Last Purchase" value={formatDate(vendor.last_purchase_at)} />
+      </div>
+
+      {loading ? (
+        <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 animate-pulse space-y-3">
+          <div className="h-4 w-24 rounded bg-surface-container-highest/60" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 rounded bg-surface-container-highest/60" />)}
+          </div>
+        </div>
+      ) : overview ? (
+        <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-outline mb-4">Dashboard</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatBox label="Total Spent" value={fmt(overview.total_spent)} color="text-primary" />
+            <StatBox label="Outstanding" value={fmt(overview.total_outstanding)} color="text-error" />
+            <StatBox label="Total Bills" value={String(overview.total_bills)} color="text-on-surface" />
+            <StatBox label="Avg Bill" value={fmt(overview.average_bill_amount)} color="text-secondary" />
+          </div>
+          {overview.recent_bills.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-outline-variant/50">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-outline mb-2">Recent Bills</p>
+              <div className="space-y-1.5">
+                {overview.recent_bills.map((b) => (
+                  <div key={b.id} className="flex items-center justify-between text-xs">
+                    <span className="text-on-surface-variant">{b.bill_reference || b.id.slice(0, 8)}</span>
+                    <span className="font-data-table text-on-surface">{fmt(b.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {outstandingBills.length > 0 && (
+        <div className="bg-surface-container-low border border-error/20 rounded-xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-sm text-error">priority_high</span>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-error">Outstanding Bills ({outstandingBills.length})</h4>
+          </div>
+          <div className="space-y-2">
+            {outstandingBills.map((b) => (
+              <div key={b.id} className="flex items-center justify-between bg-surface-container-highest rounded-lg px-4 py-2.5 text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="text-on-surface-variant">{b.bill_reference || b.id.slice(0, 8)}</span>
+                  {b.due_date && <span className="text-outline">Due {formatDate(b.due_date)}</span>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-outline">{fmt(b.amount_remaining)} remaining</span>
+                  <span className="font-data-table text-on-surface font-bold">{fmt(b.amount)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] text-outline mb-0.5">{label}</p>
+      <p className={`text-sm text-on-surface ${mono ? "font-data-table" : ""}`}>{value}</p>
+    </div>
+  );
+}
+
+function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="bg-surface-container-highest rounded-lg px-3.5 py-3">
+      <p className="text-[10px] text-outline mb-1">{label}</p>
+      <p className={`font-data-table text-sm font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}
+</file>
+
+<file path="components/VendorPOTab.tsx">
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import type { PurchaseOrderResponse, BillResponse, ConfirmReceiptResponse } from "@/features/vendors/types";
+import { fmt } from "@/features/vendors/types";
+import { vendorsApi } from "@/features/vendors/api";
+import { productsApi } from "@/features/products/api";
+import { formatDate, formatDateTime } from "./utils";
+import StatusBadge from "./StatusBadge";
+import CreatePurchaseOrderModal from "./CreatePurchaseOrderModal";
+import type { LineForm } from "./CreatePurchaseOrderModal";
+import CreateBillModal from "./CreateBillModal";
+
+interface POTabProps {
+  vendorId: string;
+  vendorName: string;
+  pos: PurchaseOrderResponse[];
+  onUpdated: () => void;
+}
+
+let _idCounter = 0;
+function uid() { return `pof_${++_idCounter}`; }
+
+export default function POTab({ vendorId, vendorName, pos, onUpdated }: POTabProps) {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [viewingPO, setViewingPO] = useState<{
+    lines: LineForm[];
+    billReference: string;
+    dueDate: string;
+    notes: string;
+    readOnly: boolean;
+  } | null>(null);
+
+  const [billablePO, setBillablePO] = useState<{ id: string; total: number } | null>(null);
+  const [receivingPO, setReceivingPO] = useState(false);
+  const [allBills, setAllBills] = useState<BillResponse[]>([]);
+  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const [productVariants, setProductVariants] = useState<Record<string, { attributes: Record<string, string> }>>({});
+
+  useEffect(() => {
+    vendorsApi.listVendorBills(vendorId).then(setAllBills).catch(() => {});
+  }, [vendorId, pos]);
+
+  useEffect(() => {
+    const variantIds = new Set<string>();
+    for (const po of pos) {
+      for (const line of po.lines) variantIds.add(line.variant_id);
+    }
+    if (variantIds.size === 0) return;
+    productsApi.list({ size: 1000 }).then((res) => {
+      const names: Record<string, string> = {};
+      const vattrs: Record<string, { attributes: Record<string, string> }> = {};
+      for (const p of res.items) {
+        if (p.variants) {
+          for (const v of p.variants) {
+            if (variantIds.has(v.id)) {
+              names[v.id] = p.name;
+              vattrs[v.id] = { attributes: v.attributes as Record<string, string> };
+            }
+          }
+        }
+      }
+      setProductNames(names);
+      setProductVariants(vattrs);
+    }).catch(() => {});
+  }, [pos]);
+
+  const handleReceiveAndBill = useCallback(async (poId: string, total: number) => {
+    setReceivingPO(true);
+    try {
+      await vendorsApi.receivePO(vendorId, poId);
+      setBillablePO({ id: poId, total });
+    } catch {} finally { setReceivingPO(false); }
+  }, [vendorId]);
+
+  function buildLineForm(po: PurchaseOrderResponse): LineForm[] {
+    return po.lines.map((l) => {
+      const pname = productNames[l.variant_id] || l.variant_id.slice(0, 12) + "...";
+      const vattrs = productVariants[l.variant_id]?.attributes;
+      const attrs: { key: string; value: string }[] = vattrs
+        ? Object.entries(vattrs).map(([k, v]) => ({ key: k, value: String(v) }))
+        : [];
+      return {
+        id: uid(),
+        raw_name: "",
+        product_name: pname,
+        is_variant_group: Object.keys(vattrs ?? {}).length > 0,
+        matched_product_id: null,
+        is_new_product: false,
+        description: "",
+        price: "",
+        cost: "",
+        category_id: "",
+        discount_id: "",
+        low_stock_threshold: "",
+        internal_notes: "",
+        variants: [{
+          id: uid(),
+          attrs,
+          quantity: l.quantity,
+          unit_cost: parseFloat(l.unit_cost),
+          price: "",
+        }],
+      };
+    });
+  }
+
+  function handleEditPO(po: PurchaseOrderResponse) {
+    setViewingPO({
+      lines: buildLineForm(po),
+      billReference: "",
+      dueDate: "",
+      notes: po.notes ?? "",
+      readOnly: false,
+    });
+  }
+
+  function handleViewPO(po: PurchaseOrderResponse) {
+    const bill = allBills.find((b) => b.po_id === po.id);
+    setViewingPO({
+      lines: buildLineForm(po),
+      billReference: bill?.bill_reference ?? "",
+      dueDate: bill?.due_date ?? "",
+      notes: po.notes ?? "",
+      readOnly: true,
+    });
+  }
+
+  function handleCreateDone(result: ConfirmReceiptResponse) {
+    setShowCreateModal(false);
+    setViewingPO(null);
+    onUpdated();
+  }
+
+  const sortedPOs = [...pos].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  return (
+    <div className="p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-on-surface-variant">
+          {pos.length} purchase order{pos.length !== 1 ? "s" : ""}
+        </p>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-3 py-1.5 rounded-lg bg-primary text-on-primary text-[10px] font-bold flex items-center gap-1 hover:bg-primary/90 transition-colors"
+        >
+          <span className="material-symbols-outlined text-xs">add</span>
+          Create Purchase Order
+        </button>
+      </div>
+
+      {pos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="w-14 h-14 rounded-full bg-surface-container-highest flex items-center justify-center mb-4">
+            <span className="material-symbols-outlined text-[32px] text-outline">receipt_long</span>
+          </div>
+          <p className="text-sm font-medium text-on-surface-variant">No purchase orders</p>
+          <p className="text-xs text-outline mt-1 mb-6">Create a PO manually or upload a receipt to get started</p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold hover:bg-primary/20 transition-colors flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-xs">add</span>
+            Create Purchase Order
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {sortedPOs.map((po) => {
+            const total = po.lines.reduce((s, l) => s + l.quantity * parseFloat(l.unit_cost), 0);
+            const bill = allBills.find((b) => b.po_id === po.id);
+            const hasBill = !!bill;
+            const lineCount = po.lines.length;
+            const isPending = po.status === "PENDING";
+            return (
+              <div
+                key={po.id}
+                onClick={() => isPending ? handleEditPO(po) : handleViewPO(po)}
+                className="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden hover:border-primary/30 transition-colors cursor-pointer"
+              >
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-data-table text-xs text-on-surface font-semibold">
+                        {bill?.bill_reference ? `#${bill.bill_reference}` : `#${po.id.slice(0, 8)}`}
+                      </span>
+                      <StatusBadge status={po.status} />
+                      {isPending && (
+                        <span className="text-[10px] text-[#d99c00] bg-[#d99c00]/10 px-1.5 py-0.5 rounded-full font-semibold">
+                          Draft
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-data-table text-sm font-bold text-on-surface shrink-0 ml-2">
+                      {fmt(total)}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-outline mb-3">
+                    <span>Created {formatDate(po.created_at)}</span>
+                    {bill?.due_date && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-outline/40" />
+                        <span>Due {formatDate(bill.due_date)}</span>
+                      </>
+                    )}
+                    <span className="w-1 h-1 rounded-full bg-outline/40" />
+                    <span>{lineCount} product{lineCount !== 1 ? "s" : ""}</span>
+                    {bill?.bill_reference && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-outline/40" />
+                        <span>Ref: {bill.bill_reference}</span>
+                      </>
+                    )}
+                    {po.notes && (
+                      <>
+                        <span className="w-1 h-1 rounded-full bg-outline/40" />
+                        <span className="truncate max-w-[140px]">{po.notes}</span>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 mb-3">
+                    {po.lines.slice(0, 3).map((line) => {
+                      const pname = productNames[line.variant_id];
+                      return (
+                        <div key={line.id} className="flex items-center justify-between text-[11px]">
+                          <span className="text-on-surface-variant truncate max-w-[220px]">
+                            {pname || line.variant_id.slice(0, 12) + "..."}
+                          </span>
+                          <span className="text-outline shrink-0 ml-2">
+                            {line.quantity} &times; {fmt(line.unit_cost)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {lineCount > 3 && (
+                      <p className="text-[10px] text-outline italic">+{lineCount - 3} more</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t border-outline-variant/40">
+                    <div className="flex items-center gap-2">
+                      {isPending ? (
+                        <span className="text-[10px] text-[#d99c00] flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[12px]">edit_note</span>
+                          Click to edit
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-outline flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[12px]">visibility</span>
+                          Click to view
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isPending ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleReceiveAndBill(po.id, total); }}
+                          disabled={receivingPO}
+                          className="px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold hover:bg-primary/20 transition-all flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <span className={`material-symbols-outlined text-xs ${receivingPO ? "animate-spin" : ""}`}>
+                            {receivingPO ? "progress_activity" : "receipt"}
+                          </span>
+                          {receivingPO ? "Receiving..." : "Receive & Bill"}
+                        </button>
+                      ) : po.status === "RECEIVED" && !hasBill ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setBillablePO({ id: po.id, total }); }}
+                          className="px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold hover:bg-primary/20 transition-all flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-xs">receipt</span>
+                          Create Bill
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showCreateModal && (
+        <CreatePurchaseOrderModal
+          vendorId={vendorId}
+          vendorName={vendorName}
+          onClose={() => setShowCreateModal(false)}
+          onDone={handleCreateDone}
+        />
+      )}
+
+      {viewingPO && (
+        <CreatePurchaseOrderModal
+          vendorId={vendorId}
+          vendorName={vendorName}
+          onClose={() => setViewingPO(null)}
+          onDone={handleCreateDone}
+          initialLines={viewingPO.lines}
+          initialBillReference={viewingPO.billReference}
+          initialDueDate={viewingPO.dueDate}
+          initialNotes={viewingPO.notes}
+          isReopen={!viewingPO.readOnly}
+          readOnly={viewingPO.readOnly}
+        />
+      )}
+
+      {billablePO && (
+        <CreateBillModal
+          vendorId={vendorId}
+          poId={billablePO.id}
+          poTotal={billablePO.total}
+          onClose={() => setBillablePO(null)}
+          onCreated={() => { onUpdated(); setBillablePO(null); }}
+        />
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="types.ts">
+export interface VendorResponse {
+  id: string;
+  tenant_id: string;
+  name: string;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  payment_terms_days: number | null;
+  active: boolean;
+  outstanding_balance: string | null;
+  last_purchase_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateVendorRequest {
+  name: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  payment_terms_days?: number;
+}
+
+export interface POLineResponse {
+  id: string;
+  po_id: string;
+  variant_id: string;
+  quantity: number;
+  unit_cost: string;
+  created_at: string;
+}
+
+export interface PurchaseOrderResponse {
+  id: string;
+  tenant_id: string;
+  vendor_id: string;
+  status: "PENDING" | "RECEIVED";
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  lines: POLineResponse[];
+}
+
+export interface CreateBillRequest {
+  bill_reference?: string;
+  amount: number;
+  due_date?: string;
+  notes?: string;
+}
+
+export interface BillResponse {
+  id: string;
+  tenant_id: string;
+  vendor_id: string;
+  po_id: string | null;
+  bill_reference: string | null;
+  amount: string;
+  amount_paid: string | null;
+  amount_remaining: string | null;
+  due_date: string | null;
+  status: "UNPAID" | "PARTIALLY_PAID" | "PAID";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayBillRequest {
+  amount: number;
+  payment_method: string;
+  notes?: string;
+}
+
+export interface VendorBillPaymentResponse {
+  payment: {
+    id: string;
+    tenant_id: string;
+    vendor_bill_id: string;
+    amount: number;
+    payment_method: string;
+    created_by: string;
+    notes: string | null;
+    created_at: string;
+  };
+  bill: BillResponse;
+}
+
+export interface VendorOverview {
+  vendor_id: string;
+  vendor_name: string;
+  total_spent: number;
+  total_outstanding: number;
+  total_bills: number;
+  average_bill_amount: number;
+  recent_bills: BillResponse[];
+}
+
+export interface OutstandingBill extends BillResponse {
+  vendor_name: string;
+}
+
+// ─── Receipt Ingestion Types ───
+
+export interface ExtractedReceiptVariant {
+  attributes: Record<string, string>;
+  quantity: number;
+  unit_cost: number;
+  price?: number;
+}
+
+export interface ExtractedReceiptLine {
+  raw_name: string;
+  product_name: string;
+  is_variant_group: boolean;
+  matched_product_id: string | null;
+  is_new_product: boolean;
+  variants: ExtractedReceiptVariant[];
+  price: number;
+  cost: number;
+}
+
+export interface ConfirmedReceiptVariant {
+  attributes: Record<string, string>;
+  quantity: number;
+  unit_cost: number;
+  price: number;
+}
+
+export interface ConfirmedReceiptLine {
+  raw_name: string;
+  product_name: string;
+  is_variant_group: boolean;
+  matched_product_id: string | null;
+  variants: ConfirmedReceiptVariant[];
+  price: number;
+  cost: number;
+  description?: string | null;
+  category_id?: string | null;
+  discount_id?: string | null;
+  low_stock_threshold?: number | null;
+  internal_notes?: string | null;
+}
+
+export interface ProcessReceiptResponse {
+  source: "image" | "excel";
+  total_cost: string;
+  extraction_notes: string | null;
+  lines: ExtractedReceiptLine[];
+}
+
+export interface ReceiptConfirmRequest {
+  lines: ConfirmedReceiptLine[];
+  bill_reference?: string | null;
+  due_date?: string | null;
+  notes?: string | null;
+}
+
+export interface ConfirmReceiptResponse {
+  purchase_order: PurchaseOrderResponse;
+  bill: BillResponse;
+  new_products_created: number;
+  message: string;
+}
+
+export type ReceiptIngestionStep = "upload" | "review" | "confirmed";
+
+export interface ReviewVariantState {
+  attributes: Record<string, string>;
+  quantity: number;
+  unit_cost: number;
+  price: string;
+}
+
+export interface ReviewLineState {
+  raw_name: string;
+  product_name: string;
+  is_variant_group: boolean;
+  matched_product_id: string | null;
+  is_new_product: boolean;
+  variants: ReviewVariantState[];
+  price: string;
+  cost: string;
+  description: string;
+  category_id: string;
+  low_stock_threshold: string;
+  internal_notes: string;
+}
+
+export interface ReceiptState {
+  step: ReceiptIngestionStep;
+  source: "image" | "excel" | null;
+  lines: ReviewLineState[];
+  total_cost: string;
+  extraction_notes: string | null;
+  bill_reference: string;
+  due_date: string;
+  notes: string;
+  new_products_count: number;
+}
+
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"] as const;
+export const ACCEPTED_MIME_TYPES = ACCEPTED_TYPES as readonly string[];
+export const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.xlsx,.xls";
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+export function fmt(v: string | number | null | undefined): string {
+  if (v == null) return "$0.00";
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return "$" + (isNaN(n) ? 0 : n).toFixed(2);
+}
+</file>
+
+</files>

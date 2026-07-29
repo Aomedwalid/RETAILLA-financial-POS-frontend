@@ -1,0 +1,2622 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.gitignore
+app/(auth)/layout.tsx
+app/(auth)/login/page.tsx
+app/(auth)/register/page.tsx
+app/(main)/dashboard/page.tsx
+app/(main)/layout.tsx
+app/globals.css
+app/layout.tsx
+app/page.tsx
+components/auth/AuthPasswordField.tsx
+components/auth/AuthTextField.tsx
+components/auth/Providers.tsx
+components/dashboard/AnomaliesFeed.tsx
+components/dashboard/BreakEvenChart.tsx
+components/dashboard/CashPositionCard.tsx
+components/dashboard/CashRunwayCard.tsx
+components/dashboard/LocationPerformanceTable.tsx
+components/dashboard/NetPositionCard.tsx
+components/dashboard/PaymentDistributionDonut.tsx
+components/dashboard/WorkingCapitalGauge.tsx
+components/layout/AppShell.tsx
+components/layout/Sidebar.tsx
+components/layout/TopBar.tsx
+components/layout/UserMenu.tsx
+eslint.config.mjs
+lib/api.ts
+lib/auth/AuthContext.tsx
+lib/auth/passwordStrength.ts
+lib/useQuery.ts
+next.config.mjs
+package.json
+postcss.config.mjs
+tsconfig.json
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".gitignore">
+/node_modules
+/.next
+/out
+/build
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env*
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+</file>
+
+<file path="app/(auth)/layout.tsx">
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useAuth } from "@/lib/auth/AuthContext";
+
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
+  const { accessToken, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && accessToken) {
+      router.replace("/dashboard");
+    }
+  }, [accessToken, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-dim">
+        <div className="flex flex-col items-center gap-3">
+          <span className="material-symbols-outlined text-primary text-4xl animate-spin">progress_activity</span>
+          <p className="text-on-surface-variant text-sm">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessToken) return null;
+
+  return <>{children}</>;
+}
+</file>
+
+<file path="app/(auth)/login/page.tsx">
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth/AuthContext";
+import { ApiError } from "@/lib/api";
+import AuthTextField from "@/components/auth/AuthTextField";
+import AuthPasswordField from "@/components/auth/AuthPasswordField";
+
+export default function LoginPage() {
+  const { login } = useAuth();
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (!email.trim()) { setError("Email is required"); return; }
+    if (!password) { setError("Password is required"); return; }
+
+    setLoading(true);
+    try {
+      await login(email, password);
+      router.replace("/dashboard");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex bg-surface-dim">
+      {/* Left - Marketing Panel */}
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#0f1923] to-[#1a1f2e] relative overflow-hidden p-16 flex-col justify-between">
+        <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(circle_at_20%_50%,rgba(172,199,255,0.4),transparent_60%)]" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-2.5 mb-12">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm text-on-primary">finance_mode</span>
+            </div>
+            <span className="text-lg font-semibold text-on-surface tracking-tight">Retaila</span>
+          </div>
+
+          <h1 className="text-display-lg-mobile lg:text-display-lg font-display-lg text-on-surface leading-tight mb-4">
+            Intelligence
+            <br />
+            <span className="text-primary">for retail</span>
+          </h1>
+          <p className="text-body-lg text-on-surface-variant max-w-md leading-relaxed">
+            Real-time multi-tenant analytics, anomaly detection, and cash flow intelligence for modern retail operations.
+          </p>
+
+          <div className="mt-12 flex flex-col gap-5">
+            {[
+              { icon: "monitoring", title: "Live dashboards", desc: "Real-time KPIs across all locations" },
+              { icon: "account_balance", title: "Cash flow tracking", desc: "Working capital, runway & break-even" },
+              { icon: "warning", title: "Anomaly alerts", desc: "AI-driven refund & discount monitoring" },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-primary text-lg">{item.icon}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-on-surface">{item.title}</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="relative z-10 text-xs text-on-surface-variant">
+          &copy; {new Date().getFullYear()} Retaila Fintech Intelligence
+        </p>
+      </div>
+
+      {/* Right - Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12">
+        <div className="w-full max-w-sm">
+          <div className="lg:hidden flex items-center gap-2.5 mb-10 justify-center">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm text-on-primary">finance_mode</span>
+            </div>
+            <span className="text-lg font-semibold text-on-surface tracking-tight">Retaila</span>
+          </div>
+
+          <h2 className="text-headline-md font-headline-md text-on-surface mb-1">Welcome back</h2>
+          <p className="text-sm text-on-surface-variant mb-8">Sign in to your account to continue</p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <AuthTextField
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoComplete="email"
+              autoFocus
+            />
+
+            <AuthPasswordField
+              label="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+            />
+
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-error bg-error/10 px-3.5 py-2.5 rounded-lg">
+                <span className="material-symbols-outlined text-[18px]">error</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 rounded-lg bg-primary text-on-primary font-medium text-sm hover:brightness-110 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loading && <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>}
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+
+          <p className="text-sm text-on-surface-variant text-center mt-8">
+            Don&apos;t have an account?{" "}
+            <Link href="/register" className="text-primary hover:underline font-medium">
+              Register
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/(auth)/register/page.tsx">
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { authApi, ApiError, setAccessToken } from "@/lib/api";
+import AuthTextField from "@/components/auth/AuthTextField";
+import AuthPasswordField from "@/components/auth/AuthPasswordField";
+import { getPasswordStrength } from "@/lib/auth/passwordStrength";
+
+const strengthColors: Record<string, string> = {
+  weak: "bg-error",
+  fair: "bg-[#d99c00]",
+  good: "bg-secondary",
+  strong: "bg-primary",
+};
+
+export default function RegisterPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const token = searchParams.get("token") || "";
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const strength = getPasswordStrength(password);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError("");
+
+    if (!token) { setError("Invalid registration link"); return; }
+    if (!email.trim()) { setError("Email is required"); return; }
+    if (!password) { setError("Password is required"); return; }
+    if (password !== confirmPassword) { setError("Passwords do not match"); return; }
+    if (strength.level === "weak") { setError("Password is too weak"); return; }
+
+    setLoading(true);
+    try {
+      const result = await authApi.registerWithToken({ token, email, password });
+      setAccessToken(result.access_token);
+      router.replace("/dashboard");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.validationErrors?.[0]?.message || err.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex bg-surface-dim">
+      {/* Left - Marketing Panel */}
+      <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-[#0f1923] to-[#1a1f2e] relative overflow-hidden p-16 flex-col justify-between">
+        <div className="absolute inset-0 opacity-[0.03] bg-[radial-gradient(circle_at_20%_50%,rgba(172,199,255,0.4),transparent_60%)]" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-2.5 mb-12">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm text-on-primary">finance_mode</span>
+            </div>
+            <span className="text-lg font-semibold text-on-surface tracking-tight">Retaila</span>
+          </div>
+
+          <h1 className="text-display-lg-mobile lg:text-display-lg font-display-lg text-on-surface leading-tight mb-4">
+            Your account
+            <br />
+            <span className="text-primary">starts here</span>
+          </h1>
+          <p className="text-body-lg text-on-surface-variant max-w-md leading-relaxed">
+            Create your account and gain instant access to real-time analytics, cash flow tools, and anomaly detection.
+          </p>
+
+          <div className="mt-12 flex flex-col gap-5">
+            {[
+              { icon: "check_circle", title: "Instant access", desc: "No approval delays — start immediately" },
+              { icon: "security", title: "Secure by default", desc: "Enterprise-grade encryption & access control" },
+              { icon: "rocket_launch", title: "Multi-tenant ready", desc: "Manage multiple locations from one view" },
+            ].map((item) => (
+              <div key={item.title} className="flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-primary text-lg">{item.icon}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-on-surface">{item.title}</p>
+                  <p className="text-xs text-on-surface-variant mt-0.5">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="relative z-10 text-xs text-on-surface-variant">
+          &copy; {new Date().getFullYear()} Retaila Fintech Intelligence
+        </p>
+      </div>
+
+      {/* Right - Register Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12">
+        <div className="w-full max-w-sm">
+          <div className="lg:hidden flex items-center gap-2.5 mb-10 justify-center">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-sm text-on-primary">finance_mode</span>
+            </div>
+            <span className="text-lg font-semibold text-on-surface tracking-tight">Retaila</span>
+          </div>
+
+          <h2 className="text-headline-md font-headline-md text-on-surface mb-1">Create account</h2>
+          <p className="text-sm text-on-surface-variant mb-8">Fill in the details to get started</p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <AuthTextField
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoComplete="email"
+              autoFocus
+            />
+
+            <div>
+              <AuthPasswordField
+                label="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Create a strong password"
+                autoComplete="new-password"
+              />
+              {password && (
+                <div className="mt-2.5">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                          i <= strength.score ? strengthColors[strength.level] : "bg-surface-container-highest"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`text-xs mt-1 font-medium ${
+                    strength.level === "weak" ? "text-error" :
+                    strength.level === "fair" ? "text-[#d99c00]" :
+                    strength.level === "good" ? "text-secondary" :
+                    "text-primary"
+                  }`}>
+                    {strength.label}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <AuthPasswordField
+              label="Confirm Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter your password"
+              autoComplete="new-password"
+            />
+
+            {error && (
+              <div className="flex items-center gap-2 text-sm text-error bg-error/10 px-3.5 py-2.5 rounded-lg">
+                <span className="material-symbols-outlined text-[18px]">error</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            {!token && (
+              <div className="flex items-center gap-2 text-sm text-[#d99c00] bg-[#d99c00]/10 px-3.5 py-2.5 rounded-lg">
+                <span className="material-symbols-outlined text-[18px]">info</span>
+                <span>Invalid or missing registration link</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !token}
+              className="w-full h-11 rounded-lg bg-primary text-on-primary font-medium text-sm hover:brightness-110 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {loading && <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>}
+              {loading ? "Creating account..." : "Create account"}
+            </button>
+          </form>
+
+          <p className="text-sm text-on-surface-variant text-center mt-8">
+            Already have an account?{" "}
+            <Link href="/login" className="text-primary hover:underline font-medium">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/(main)/dashboard/page.tsx">
+"use client";
+
+import CashPositionCard from "@/components/dashboard/CashPositionCard";
+import NetPositionCard from "@/components/dashboard/NetPositionCard";
+import WorkingCapitalGauge from "@/components/dashboard/WorkingCapitalGauge";
+import CashRunwayCard from "@/components/dashboard/CashRunwayCard";
+import BreakEvenChart from "@/components/dashboard/BreakEvenChart";
+import PaymentDistributionDonut from "@/components/dashboard/PaymentDistributionDonut";
+import LocationPerformanceTable from "@/components/dashboard/LocationPerformanceTable";
+import AnomaliesFeed from "@/components/dashboard/AnomaliesFeed";
+
+export default function DashboardPage() {
+  return (
+    <div className="p-container-margin grid grid-cols-12 gap-gutter">
+      {/* Hero Row */}
+      <div className="col-span-12 md:col-span-8">
+        <CashPositionCard />
+      </div>
+      <div className="col-span-12 md:col-span-4">
+        <NetPositionCard />
+      </div>
+
+      {/* Second Row */}
+      <div className="col-span-12 lg:col-span-4">
+        <WorkingCapitalGauge />
+      </div>
+      <div className="col-span-12 lg:col-span-8">
+        <CashRunwayCard />
+      </div>
+
+      {/* Third Row */}
+      <div className="col-span-12 lg:col-span-7">
+        <BreakEvenChart />
+      </div>
+      <div className="col-span-12 lg:col-span-5">
+        <PaymentDistributionDonut />
+      </div>
+
+      {/* Fourth Row */}
+      <div className="col-span-12 lg:col-span-8">
+        <LocationPerformanceTable />
+      </div>
+      <div className="col-span-12 lg:col-span-4">
+        <AnomaliesFeed />
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="app/(main)/layout.tsx">
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useAuth } from "@/lib/auth/AuthContext";
+import AppShell from "@/components/layout/AppShell";
+
+export default function MainLayout({ children }: { children: React.ReactNode }) {
+  const { accessToken, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && !accessToken) {
+      router.replace("/login");
+    }
+  }, [accessToken, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-dim">
+        <div className="flex flex-col items-center gap-3">
+          <span className="material-symbols-outlined text-primary text-4xl animate-spin">progress_activity</span>
+          <p className="text-on-surface-variant text-sm">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!accessToken) return null;
+
+  return (
+    <AppShell tabs={[
+      { id: "overview", label: "Overview" },
+      { id: "regional", label: "Regional" },
+      { id: "stores", label: "Stores" },
+    ]}>
+      {children}
+    </AppShell>
+  );
+}
+</file>
+
+<file path="app/globals.css">
+@import "tailwindcss";
+
+@theme inline {
+  --color-on-secondary: #003824;
+  --color-secondary-container: #00ba81;
+  --color-surface-container-lowest: #0b0e14;
+  --color-on-tertiary: #2c303c;
+  --color-on-primary-container: #00285a;
+  --color-surface-container-low: #191c22;
+  --color-outline: #8b919f;
+  --color-primary-fixed-dim: #acc7ff;
+  --color-error-container: #93000a;
+  --color-surface-bright: #363940;
+  --color-primary-fixed: #d7e2ff;
+  --color-on-secondary-fixed: #002113;
+  --color-on-error: #690005;
+  --color-primary: #acc7ff;
+  --color-on-tertiary-fixed-variant: #434653;
+  --color-inverse-primary: #005cbd;
+  --color-on-background: #e1e2eb;
+  --color-surface-variant: #32353c;
+  --color-secondary-fixed: #6bfcbd;
+  --color-on-tertiary-container: #262935;
+  --color-surface-container-highest: #32353c;
+  --color-surface: #10131a;
+  --color-on-secondary-container: #00422c;
+  --color-tertiary-fixed: #dfe2f2;
+  --color-on-primary-fixed: #001a40;
+  --color-on-primary: #002f67;
+  --color-primary-container: #468fff;
+  --color-background: #10131a;
+  --color-tertiary-container: #8d909f;
+  --color-surface-container: #1d2026;
+  --color-on-surface-variant: #c1c6d6;
+  --color-error: #ffb4ab;
+  --color-inverse-surface: #e1e2eb;
+  --color-surface-dim: #10131a;
+  --color-tertiary-fixed-dim: #c3c6d5;
+  --color-secondary: #49dfa2;
+  --color-on-primary-fixed-variant: #004591;
+  --color-on-tertiary-fixed: #171b26;
+  --color-surface-tint: #acc7ff;
+  --color-surface-container-high: #272a31;
+  --color-tertiary: #c3c6d5;
+  --color-secondary-fixed-dim: #49dfa2;
+  --color-on-secondary-fixed-variant: #005236;
+  --color-on-error-container: #ffdad6;
+  --color-on-surface: #e1e2eb;
+  --color-inverse-on-surface: #2e3037;
+  --color-outline-variant: #414754;
+
+  --font-headline-sm: var(--font-space-grotesk), sans-serif;
+  --font-label-caps: var(--font-inter), sans-serif;
+  --font-data-table: var(--font-ibm-plex-mono), monospace;
+  --font-display-lg-mobile: var(--font-space-grotesk), sans-serif;
+  --font-body-md: var(--font-inter), sans-serif;
+  --font-headline-md: var(--font-space-grotesk), sans-serif;
+  --font-display-lg: var(--font-space-grotesk), sans-serif;
+  --font-body-lg: var(--font-inter), sans-serif;
+
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--font-weight: 600;
+  --text-label-caps: 12px;
+  --text-label-caps--line-height: 16px;
+  --text-label-caps--letter-spacing: 0.05em;
+  --text-label-caps--font-weight: 600;
+  --text-data-table: 14px;
+  --text-data-table--line-height: 20px;
+  --text-data-table--font-weight: 500;
+  --text-display-lg-mobile: 32px;
+  --text-display-lg-mobile--line-height: 40px;
+  --text-display-lg-mobile--letter-spacing: -0.02em;
+  --text-display-lg-mobile--font-weight: 700;
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--font-weight: 400;
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 32px;
+  --text-headline-md--font-weight: 600;
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 56px;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg--font-weight: 700;
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--font-weight: 400;
+
+  --spacing-card-padding: 20px;
+  --spacing-stack-md: 16px;
+  --spacing-stack-lg: 32px;
+  --spacing-unit: 4px;
+  --spacing-stack-sm: 8px;
+  --spacing-gutter: 16px;
+  --spacing-container-margin: 24px;
+}
+
+body {
+  background-color: #0b0e14;
+  color: #e1e2eb;
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+.glass-card {
+  background: #131722;
+  border: 1px solid #1f2633;
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-card:hover {
+  border-color: rgba(172, 199, 255, 0.15);
+  background: #1c212e;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0b0e14;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #32353c;
+  border-radius: 10px;
+}
+
+.hide-scroll::-webkit-scrollbar {
+  display: none;
+}
+</file>
+
+<file path="app/layout.tsx">
+import type { Metadata } from "next";
+import { Inter, Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
+import Providers from "@/components/auth/Providers";
+import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  weight: ["500"],
+  variable: "--font-ibm-plex-mono",
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "Retaila | Executive Dashboard",
+  description: "Retaila Fintech Intelligence — Multi-tenant retail management platform",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className="dark">
+      <head>
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body
+        className={`${inter.variable} ${spaceGrotesk.variable} ${ibmPlexMono.variable} font-body-md text-body-md overflow-x-hidden`}
+      >
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  );
+}
+</file>
+
+<file path="app/page.tsx">
+import { redirect } from "next/navigation";
+
+export default function RootPage() {
+  redirect("/dashboard");
+}
+</file>
+
+<file path="components/auth/AuthPasswordField.tsx">
+"use client";
+
+import { InputHTMLAttributes, useState } from "react";
+
+interface AuthPasswordFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string;
+  error?: string;
+}
+
+export default function AuthPasswordField({ label, error, className = "", id, ...props }: AuthPasswordFieldProps) {
+  const inputId = id || label.toLowerCase().replace(/\s+/g, "-");
+  const [show, setShow] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={inputId} className="text-sm font-medium text-on-surface-variant">
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={inputId}
+          type={show ? "text" : "password"}
+          className={`w-full h-11 px-3.5 pr-11 rounded-lg border bg-surface-container-high text-on-surface placeholder:text-on-surface-variant/40 outline-none transition-colors duration-200
+            ${error ? "border-error" : "border-outline/30 focus:border-primary"}
+            ${className}`}
+          {...props}
+        />
+        <button
+          type="button"
+          onClick={() => setShow((s) => !s)}
+          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+          tabIndex={-1}
+        >
+          <span className="material-symbols-outlined text-lg">
+            {show ? "visibility_off" : "visibility"}
+          </span>
+        </button>
+      </div>
+      {error && <p className="text-xs text-error mt-0.5">{error}</p>}
+    </div>
+  );
+}
+</file>
+
+<file path="components/auth/AuthTextField.tsx">
+"use client";
+
+import { InputHTMLAttributes } from "react";
+
+interface AuthTextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+  label: string;
+  error?: string;
+}
+
+export default function AuthTextField({ label, error, className = "", id, ...props }: AuthTextFieldProps) {
+  const inputId = id || label.toLowerCase().replace(/\s+/g, "-");
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={inputId} className="text-sm font-medium text-on-surface-variant">
+        {label}
+      </label>
+      <input
+        id={inputId}
+        className={`w-full h-11 px-3.5 rounded-lg border bg-surface-container-high text-on-surface placeholder:text-on-surface-variant/40 outline-none transition-colors duration-200
+          ${error ? "border-error" : "border-outline/30 focus:border-primary"}
+          ${className}`}
+        {...props}
+      />
+      {error && <p className="text-xs text-error mt-0.5">{error}</p>}
+    </div>
+  );
+}
+</file>
+
+<file path="components/auth/Providers.tsx">
+"use client";
+
+import { AuthProvider } from "@/lib/auth/AuthContext";
+import type { ReactNode } from "react";
+
+export default function Providers({ children }: { children: ReactNode }) {
+  return <AuthProvider>{children}</AuthProvider>;
+}
+</file>
+
+<file path="components/dashboard/AnomaliesFeed.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+interface AnomalyItem {
+  id: string;
+  type: string;
+  user: string;
+  rate: number;
+  avgRate: number;
+  count: number;
+  severity: string;
+}
+
+export default function AnomaliesFeed() {
+  const { data, loading, error } = useQuery(
+    () => Promise.all([
+      reportsApi.refundAnomalies({}),
+      reportsApi.discountAnomalies({}),
+    ]),
+    []
+  );
+
+  const [refunds, discounts] = Array.isArray(data) ? data : [[], []];
+
+  const anomalies: AnomalyItem[] = [
+    ...(Array.isArray(refunds) ? refunds.filter((a: { is_refund_anomaly: boolean }) => a.is_refund_anomaly).map((a: { user_id: string; user_email?: string; refund_rate: number | string; tenant_avg_refund_rate: number | string; refund_count: number }) => ({
+      id: `refund-${a.user_id}`,
+      type: "refund",
+      user: a.user_email || a.user_id,
+      rate: parseFloat(String(a.refund_rate)),
+      avgRate: parseFloat(String(a.tenant_avg_refund_rate)),
+      count: a.refund_count,
+      severity: parseFloat(String(a.refund_rate)) > parseFloat(String(a.tenant_avg_refund_rate)) * 2 ? "high" : "medium",
+    })) : []),
+    ...(Array.isArray(discounts) ? discounts.filter((a: { is_discount_anomaly: boolean }) => a.is_discount_anomaly).map((a: { user_id: string; user_email?: string; discount_rate: number | string; tenant_avg_discount_rate: number | string; discount_usage_count: number }) => ({
+      id: `discount-${a.user_id}`,
+      type: "discount",
+      user: a.user_email || a.user_id,
+      rate: parseFloat(String(a.discount_rate)),
+      avgRate: parseFloat(String(a.tenant_avg_discount_rate)),
+      count: a.discount_usage_count,
+      severity: parseFloat(String(a.discount_rate)) > parseFloat(String(a.tenant_avg_discount_rate)) * 2 ? "high" : "medium",
+    })) : []),
+  ].sort((a, b) => b.rate - a.rate);
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding flex flex-col animate-pulse">
+        <div className="flex items-center justify-between mb-6">
+          <div className="h-3 w-28 rounded bg-surface-container-highest/60" />
+          <div className="h-5 w-5 rounded bg-surface-container-highest/60" />
+        </div>
+        <div className="space-y-4 flex-1">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="p-3 rounded-lg bg-surface-container-low border border-outline-variant flex items-start gap-3">
+              <div className="w-8 h-8 rounded bg-surface-container-highest/60" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-36 rounded bg-surface-container-highest/60" />
+                <div className="h-3 w-48 rounded bg-surface-container-highest/60" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding">
+        <p className="text-label-caps text-on-surface-variant uppercase">Anomalies Feed</p>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load anomalies</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding flex flex-col">
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-label-caps text-on-surface-variant uppercase">Anomalies Feed</p>
+        <span className="material-symbols-outlined text-outline text-[20px]">warning</span>
+      </div>
+
+      {anomalies.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center py-8 text-center">
+          <span className="material-symbols-outlined text-[32px] text-secondary mb-2">check_circle</span>
+          <p className="text-xs text-on-surface-variant">No anomalies detected</p>
+        </div>
+      ) : (
+        <div className="space-y-4 flex-1">
+          {anomalies.slice(0, 5).map((a) => (
+            <div
+              key={a.id}
+              className={
+                a.severity === "high"
+                  ? "p-3 rounded-lg bg-error-container/20 border border-error-container/30 flex items-start gap-3"
+                  : "p-3 rounded-lg bg-tertiary-container/10 border border-tertiary-container/30 flex items-start gap-3"
+              }
+            >
+              <div
+                className={
+                  a.severity === "high"
+                    ? "bg-error-container text-on-error-container p-1 rounded"
+                    : "bg-tertiary-container text-on-tertiary-container p-1 rounded"
+                }
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  {a.type === "refund" ? "emergency_home" : "sell"}
+                </span>
+              </div>
+              <div>
+                <p
+                  className={
+                    a.severity === "high"
+                      ? "text-sm font-bold text-on-error-container"
+                      : "text-sm font-bold text-on-tertiary-container"
+                  }
+                >
+                  {a.type === "refund" ? "Refund Spike detected" : "Unusual Discount Usage"}
+                </p>
+                <p className="text-[11px] text-on-surface-variant">
+                  {a.user} &middot; Rate {(a.rate * 100).toFixed(1)}% (avg {(a.avgRate * 100).toFixed(1)}%)
+                </p>
+                <button className="text-[11px] text-primary font-bold mt-1 inline-block uppercase tracking-wider">
+                  {a.type === "refund" ? "Investigate Reports" : "Review Transactions"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button className="mt-6 w-full py-2 border border-outline-variant rounded-lg text-xs font-bold hover:bg-surface-container-high transition-colors">
+        Clear Alerts
+      </button>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/BreakEvenChart.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+export default function BreakEvenChart() {
+  const { data, loading, error } = useQuery(
+    () => reportsApi.breakEven(90),
+    []
+  );
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding animate-pulse">
+        <div className="flex items-center justify-between mb-8">
+          <div className="h-3 w-36 rounded bg-surface-container-highest/60" />
+          <div className="flex gap-4">
+            <div className="h-3 w-16 rounded bg-surface-container-highest/60" />
+            <div className="h-3 w-16 rounded bg-surface-container-highest/60" />
+          </div>
+        </div>
+        <div className="h-64 w-full rounded bg-surface-container-highest/40" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding">
+        <p className="text-label-caps text-on-surface-variant uppercase">Break-even Analysis</p>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load</p>
+        </div>
+      </div>
+    );
+  }
+
+  const dailyFixed = parseFloat(data?.avg_daily_fixed_costs ?? "0");
+  const marginPct = parseFloat(data?.avg_margin_pct ?? "0");
+  const beRevenue = parseFloat(data?.break_even_daily_revenue ?? "0") || (marginPct > 0 ? dailyFixed / (marginPct / 100) : 0);
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding">
+      <div className="flex items-center justify-between mb-8">
+        <p className="text-label-caps text-on-surface-variant uppercase">Break-even Analysis</p>
+        <div className="flex items-center gap-4 text-[10px] font-bold uppercase">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-primary"></span>
+            Revenue
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-error border border-white/20"></span>
+            Fixed Costs
+          </div>
+        </div>
+      </div>
+      <div className="h-64 w-full">
+        {/* Line chart visual placeholder */}
+      </div>
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-xs text-on-surface-variant">
+          Projected Break-even Date:{" "}
+          <span className="text-on-surface font-bold">Nov 14, 2024</span>
+        </p>
+        <button className="text-xs font-bold text-primary hover:underline">
+          View Projection Detail
+        </button>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/CashPositionCard.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+function formatCurrency(value: number | string | null | undefined): string {
+  if (value == null) return "$0.00";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return num.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export default function CashPositionCard() {
+  const { data, loading, error } = useQuery(
+    () => reportsApi.businessCashPosition({}),
+    []
+  );
+
+  const cash = data?.business_cash_net ?? 4892120.45;
+  const trend = 12.4;
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding flex flex-col justify-between overflow-hidden relative group min-h-[180px] animate-pulse">
+        <div className="space-y-4">
+          <div className="h-3 w-32 rounded bg-surface-container-highest/60" />
+          <div className="h-8 w-48 rounded bg-surface-container-highest/60" />
+        </div>
+        <div className="mt-8 h-3 w-44 rounded bg-surface-container-highest/40" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding flex flex-col justify-between overflow-hidden relative group min-h-[180px]">
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load cash position</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding flex flex-col justify-between overflow-hidden relative group">
+      <div>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <p className="text-label-caps text-on-surface-variant uppercase mb-1">
+              Business Cash Position
+            </p>
+            <h3 className="font-display-lg text-display-lg font-bold font-data-table">
+              {formatCurrency(cash)}
+            </h3>
+          </div>
+          <div className="flex items-center gap-2 text-secondary bg-secondary/10 px-3 py-1 rounded-full border border-secondary/20">
+            <span className="material-symbols-outlined text-sm">trending_up</span>
+            <span className="text-xs font-bold">+{trend}%</span>
+          </div>
+        </div>
+        <div className="h-32 w-full"></div>
+      </div>
+      <p className="text-xs text-on-surface-variant mt-4">
+        Calculated across 42 operating accounts in real-time.
+      </p>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/CashRunwayCard.tsx">
+"use client";
+
+import { useState } from "react";
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+const LOOKBACK_OPTIONS = [
+  { label: "30D", value: 30 },
+  { label: "90D", value: 90 },
+  { label: "180D", value: 180 },
+];
+
+export default function CashRunwayCard() {
+  const [lookback, setLookback] = useState(90);
+  const { data, loading, error } = useQuery(
+    () => reportsApi.runway(lookback),
+    [lookback]
+  );
+
+  const opCash = parseFloat(data?.operating_cash ?? "0");
+  const avgBurn = parseFloat(data?.avg_daily_burn ?? "0");
+  const runwayDays = data?.runway_days != null ? parseFloat(data.runway_days) : avgBurn > 0 ? opCash / avgBurn : 252;
+  const runwayMonths = runwayDays / 30;
+
+  const barPct = Math.min((runwayDays / 365) * 100, 100);
+
+  let barColor = "bg-secondary";
+  if (runwayMonths < 3) barColor = "bg-error";
+  else if (runwayMonths < 6) barColor = "bg-tertiary";
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding animate-pulse">
+        <div className="h-3 w-36 rounded bg-surface-container-highest/60 mb-1" />
+        <div className="h-7 w-28 rounded bg-surface-container-highest/60 mb-8" />
+        <div className="flex gap-1 mb-8">
+          <div className="h-7 w-12 rounded bg-surface-container-highest/60" />
+          <div className="h-7 w-12 rounded bg-surface-container-highest/60" />
+          <div className="h-7 w-12 rounded bg-surface-container-highest/60" />
+        </div>
+        <div className="h-4 w-full rounded-full bg-surface-container-highest/40" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding">
+        <p className="text-label-caps text-on-surface-variant uppercase mb-1">Cash Runway Estimate</p>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <p className="text-label-caps text-on-surface-variant uppercase mb-1">
+            Cash Runway Estimate
+          </p>
+          <p className="text-headline-md font-bold text-primary">
+            {runwayMonths.toFixed(1)} Months
+          </p>
+        </div>
+        <div className="bg-surface-container-highest p-1 rounded-lg flex gap-1">
+          {LOOKBACK_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setLookback(opt.value)}
+              className={
+                lookback === opt.value
+                  ? "px-3 py-1 rounded-md bg-surface-container-low text-xs font-bold text-primary shadow-sm"
+                  : "px-3 py-1 rounded-md text-xs font-bold text-on-surface-variant hover:text-primary"
+              }
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-8 mt-12">
+        <div className="relative h-4 w-full bg-surface-container-highest rounded-full overflow-hidden">
+          <div
+            className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${barColor}`}
+            style={{ width: `${barPct}%` }}
+          />
+          <div className="absolute top-0 left-[25%] h-full w-px bg-on-background/20" />
+          <div className="absolute top-0 left-[50%] h-full w-px bg-on-background/20" />
+        </div>
+        <div className="flex justify-between text-[10px] font-bold text-on-surface-variant tracking-widest uppercase">
+          <span className="text-error">Critical (&lt;3M)</span>
+          <span className="text-tertiary">Stability (3-6M)</span>
+          <span className="text-secondary">Growth (&gt;6M)</span>
+        </div>
+      </div>
+
+      <div className="mt-12 p-4 rounded-lg bg-surface-container-low border border-outline-variant flex items-center gap-4">
+        <span className="material-symbols-outlined text-secondary">verified</span>
+        <p className="text-sm text-on-surface">
+          Runway extended by <span className="font-bold text-secondary">1.2 months</span> due to reduced customer acquisition cost in October.
+        </p>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/LocationPerformanceTable.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+function formatCurrency(value: number | string | null | undefined): string {
+  if (value == null) return "$0.00";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return num.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatVolume(value: number | string | null | undefined): string {
+  if (value == null) return "0 txn";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return num.toLocaleString("en-US") + " txn";
+}
+
+export default function LocationPerformanceTable() {
+  const { data, loading, error } = useQuery(
+    () => reportsApi.locations(),
+    []
+  );
+
+  const locations = Array.isArray(data) ? data : [];
+  const maxSales = locations.length > 0
+    ? Math.max(...locations.map((l: { total_sales: number | string }) => parseFloat(String(l.total_sales))))
+    : 1;
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl overflow-hidden animate-pulse">
+        <div className="p-card-padding border-b border-outline-variant flex justify-between items-center">
+          <div className="h-3 w-36 rounded bg-surface-container-highest/60" />
+          <div className="h-3 w-24 rounded bg-surface-container-highest/60" />
+        </div>
+        <div className="space-y-4 p-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex gap-4">
+              <div className="h-5 w-40 rounded bg-surface-container-highest/60" />
+              <div className="h-5 w-20 rounded bg-surface-container-highest/60" />
+              <div className="h-5 flex-1 rounded bg-surface-container-highest/60" />
+              <div className="h-5 w-28 rounded bg-surface-container-highest/60" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="p-card-padding border-b border-outline-variant">
+          <p className="text-label-caps text-on-surface-variant uppercase">Location Performance</p>
+        </div>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load locations</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (locations.length === 0) {
+    return (
+      <div className="glass-card rounded-xl overflow-hidden">
+        <div className="p-card-padding border-b border-outline-variant flex justify-between items-center">
+          <p className="text-label-caps text-on-surface-variant uppercase">Location Performance</p>
+          <button className="text-xs text-primary font-bold">View All 42 Stores</button>
+        </div>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <p className="text-xs text-on-surface-variant">No location data available</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl overflow-hidden flex flex-col">
+      <div className="p-card-padding border-b border-outline-variant flex justify-between items-center">
+        <p className="text-label-caps text-on-surface-variant uppercase">Location Performance</p>
+        <button className="text-xs text-primary font-bold">
+          View All {locations.length} Store{locations.length !== 1 ? "s" : ""}
+        </button>
+      </div>
+      <div className="overflow-x-auto flex-1">
+        <table className="w-full text-left">
+          <thead className="bg-surface-container-low">
+            <tr>
+              <th className="px-6 py-4 text-label-caps text-on-surface-variant uppercase font-semibold">Location</th>
+              <th className="px-6 py-4 text-label-caps text-on-surface-variant uppercase font-semibold">Volume</th>
+              <th className="px-6 py-4 text-label-caps text-on-surface-variant uppercase font-semibold">Revenue Trend</th>
+              <th className="px-6 py-4 text-label-caps text-on-surface-variant uppercase font-semibold text-right">Revenue</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant">
+            {locations.map((loc: { location_id?: string; location_name: string; total_sales: number | string; total_refunds?: number | string; total_expenses?: number | string; net_cash_position?: number | string }, idx: number) => {
+              const sales = parseFloat(String(loc.total_sales));
+              const barPct = (sales / maxSales) * 100;
+              let barColor = "bg-secondary";
+              if (barPct < 30) barColor = "bg-error";
+              else if (barPct < 60) barColor = "bg-primary";
+
+              return (
+                <tr
+                  key={loc.location_id ?? idx}
+                  className="hover:bg-surface-container-high transition-colors group cursor-pointer"
+                >
+                  <td className="px-6 py-4 font-medium">{loc.location_name}</td>
+                  <td className="px-6 py-4 text-sm text-on-surface-variant">
+                    {formatVolume(loc.total_sales)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-1 w-32 h-6">
+                      <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${barColor}`}
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right font-data-table">
+                    <span className={sales >= 0 ? "text-secondary" : "text-error"}>
+                      ${formatCurrency(sales)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/NetPositionCard.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+function formatCurrency(value: number | string | null | undefined): string {
+  if (value == null) return "$0.00";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return num.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export default function NetPositionCard() {
+  const { data, loading, error } = useQuery(
+    () => reportsApi.netPosition({}),
+    []
+  );
+
+  const netPos = data?.net_position ?? 2105443.0;
+  const accountsPayable = data?.total_expenses ?? 842100;
+  const accountsReceivable = data?.total_sales ?? 2900000;
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding flex flex-col justify-between min-h-[180px] animate-pulse">
+        <div className="space-y-4">
+          <div className="flex justify-between">
+            <div className="h-3 w-24 rounded bg-surface-container-highest/60" />
+            <div className="h-4 w-4 rounded bg-surface-container-highest/60" />
+          </div>
+          <div className="h-7 w-36 rounded bg-surface-container-highest/60" />
+          <div className="h-5 w-28 rounded bg-surface-container-highest/60" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding flex flex-col justify-between min-h-[180px]">
+        <div className="flex flex-col items-center justify-center h-full text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load net position</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding flex flex-col justify-between">
+      <div>
+        <div className="flex items-center justify-between mb-6">
+          <p className="text-label-caps text-on-surface-variant uppercase">Net Position</p>
+          <span className="material-symbols-outlined text-outline">info</span>
+        </div>
+        <h3 className="font-headline-md text-headline-md font-data-table mb-2">
+          {formatCurrency(netPos)}
+        </h3>
+        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container-highest border border-outline-variant">
+          <span className="text-[10px] font-bold text-on-surface-variant">Q4 DELTA</span>
+          <span className="text-[10px] font-bold text-secondary">+$244K</span>
+        </div>
+      </div>
+      <div className="mt-8 border-t border-outline-variant/30 pt-6">
+        <div className="flex justify-between items-end">
+          <div>
+            <p className="text-xs text-on-surface-variant">Accounts Payable</p>
+            <p className="font-data-table text-sm">{formatCurrency(accountsPayable)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-on-surface-variant">Accounts Receivable</p>
+            <p className="font-data-table text-sm">{formatCurrency(accountsReceivable)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/PaymentDistributionDonut.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+export default function PaymentDistributionDonut() {
+  const { data, loading, error } = useQuery(
+    () => reportsApi.paymentMethods({}),
+    []
+  );
+
+  const items = Array.isArray(data) && data.length > 0
+    ? data.map((d: { payment_method: string; total_amount: number | string; transaction_count: number }) => ({
+        method: d.payment_method,
+        amount: parseFloat(String(d.total_amount)),
+        count: d.transaction_count,
+      }))
+    : [
+        { method: "card", amount: 65.2, count: 0 },
+        { method: "credit", amount: 24.8, count: 0 },
+        { method: "cash", amount: 10.0, count: 0 },
+      ];
+
+  const total = items.reduce((s: number, i: { amount: number }) => s + i.amount, 0);
+  const cardPct = total > 0 ? (items.find((i: { method: string }) => i.method === "card")?.amount ?? 0) / total * 100 : 65.2;
+  const creditPct = total > 0 ? (items.find((i: { method: string }) => i.method === "credit")?.amount ?? 0) / total * 100 : 24.8;
+  const cashPct = total > 0 ? (items.find((i: { method: string }) => i.method === "cash")?.amount ?? 0) / total * 100 : 10.0;
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding animate-pulse">
+        <div className="h-3 w-48 rounded bg-surface-container-highest/60 mb-8" />
+        <div className="flex items-center gap-8">
+          <div className="w-40 h-40 rounded-full bg-surface-container-highest/40" />
+          <div className="flex-1 space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-5 rounded bg-surface-container-highest/60" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding">
+        <p className="text-label-caps text-on-surface-variant uppercase mb-8">Payment Method Distribution</p>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding">
+      <p className="text-label-caps text-on-surface-variant uppercase mb-8">
+        Payment Method Distribution
+      </p>
+      <div className="flex items-center gap-8">
+        <div className="w-40 h-40 relative flex-shrink-0">
+          <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+            <path
+              className="text-primary"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              fill="none"
+              stroke="currentColor"
+              strokeDasharray={`${cardPct.toFixed(0)}, 100`}
+              strokeWidth="4"
+            />
+            <path
+              className="text-secondary"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              fill="none"
+              stroke="currentColor"
+              strokeDasharray={`${creditPct.toFixed(0)}, 100`}
+              strokeDashoffset={`-${cardPct.toFixed(0)}`}
+              strokeWidth="4"
+            />
+            <path
+              className="text-tertiary"
+              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              fill="none"
+              stroke="currentColor"
+              strokeDasharray={`${cashPct.toFixed(0)}, 100`}
+              strokeDashoffset={`-${(cardPct + creditPct).toFixed(0)}`}
+              strokeWidth="4"
+            />
+          </svg>
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <p className="text-xs font-bold text-on-surface-variant">TOTAL</p>
+            <p className="font-data-table text-sm">100%</p>
+          </div>
+        </div>
+        <div className="flex-1 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm bg-primary"></span>
+              <span className="text-sm font-medium">Card</span>
+            </div>
+            <span className="font-data-table text-sm">{cardPct.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm bg-secondary"></span>
+              <span className="text-sm font-medium">Credit</span>
+            </div>
+            <span className="font-data-table text-sm">{creditPct.toFixed(1)}%</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm bg-tertiary"></span>
+              <span className="text-sm font-medium">Cash</span>
+            </div>
+            <span className="font-data-table text-sm">{cashPct.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/dashboard/WorkingCapitalGauge.tsx">
+"use client";
+
+import useQuery from "@/lib/useQuery";
+import { reportsApi } from "@/lib/api";
+
+export default function WorkingCapitalGauge() {
+  const { data, loading, error } = useQuery(
+    () => reportsApi.workingCapital(),
+    []
+  );
+
+  const receivable = parseFloat(data?.receivable_from_customers ?? "0");
+  const payable = parseFloat(data?.payable_to_vendors ?? "0");
+  const netWc = parseFloat(data?.net_working_capital ?? "0");
+  const ratio = payable > 0 ? receivable / payable : 1.74;
+  const total = receivable + payable;
+  const receivablePct = total > 0 ? (receivable / total) * 100 : 65;
+  const circumference = 2 * Math.PI * 80;
+  const offset = circumference * (1 - receivablePct / 100);
+
+  if (loading) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding animate-pulse">
+        <div className="h-3 w-40 rounded bg-surface-container-highest/60 mb-6" />
+        <div className="flex items-center justify-center py-8">
+          <div className="w-48 h-48 rounded-full bg-surface-container-highest/40" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card rounded-xl p-card-padding">
+        <p className="text-label-caps text-on-surface-variant uppercase mb-6">Working Capital Efficiency</p>
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <p className="text-xs text-on-surface-variant">Failed to load</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-xl p-card-padding">
+      <p className="text-label-caps text-on-surface-variant uppercase mb-6">
+        Working Capital Efficiency
+      </p>
+      <div className="relative flex items-center justify-center py-8">
+        <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 192 192">
+          <circle
+            className="text-surface-container-highest"
+            cx="96"
+            cy="96"
+            fill="transparent"
+            r="80"
+            stroke="currentColor"
+            strokeWidth="12"
+          />
+          <circle
+            className="text-secondary"
+            cx="96"
+            cy="96"
+            fill="transparent"
+            r="80"
+            stroke="currentColor"
+            strokeDasharray={String(circumference)}
+            strokeDashoffset={String(offset)}
+            strokeWidth="12"
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <p className="font-display-lg text-headline-md font-bold">{ratio.toFixed(2)}</p>
+          <p className="text-[10px] text-on-surface-variant">RATIO</p>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between text-xs font-medium">
+        <span className="text-on-surface-variant">Healthy: 1.5 - 2.0</span>
+        <span className="text-secondary">Optimal</span>
+      </div>
+    </div>
+  );
+}
+</file>
+
+<file path="components/layout/AppShell.tsx">
+"use client";
+
+import Sidebar from "./Sidebar";
+import TopBar from "./TopBar";
+
+interface AppShellProps {
+  children: React.ReactNode;
+  title?: string;
+  tabs?: { id: string; label: string }[];
+}
+
+export default function AppShell({ children, title = "Executive Dashboard", tabs }: AppShellProps) {
+  return (
+    <div className="min-h-screen">
+      <Sidebar />
+      <TopBar title={title} tabs={tabs} />
+      <main className="ml-[240px] pt-16 min-h-screen">{children}</main>
+    </div>
+  );
+}
+</file>
+
+<file path="components/layout/Sidebar.tsx">
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+interface NavItem {
+  href: string;
+  icon: string;
+  label: string;
+}
+
+const navItems: NavItem[] = [
+  { href: "/dashboard", icon: "dashboard", label: "Dashboard" },
+  { href: "/pos", icon: "point_of_sale", label: "POS" },
+  { href: "/products", icon: "inventory_2", label: "Products" },
+  { href: "/discounts", icon: "sell", label: "Discounts & Promotions" },
+  { href: "/customers", icon: "group", label: "Customers" },
+  { href: "/store-credit", icon: "payments", label: "Store Credit" },
+  { href: "/reports", icon: "analytics", label: "Financial Reports" },
+  { href: "/budgets", icon: "account_balance_wallet", label: "Budgets" },
+  { href: "/expenses", icon: "receipt_long", label: "Expenses" },
+  { href: "/vendors", icon: "conveyor_belt", label: "Vendors" },
+  { href: "/reconciliation", icon: "account_balance", label: "Reconciliation" },
+  { href: "/team", icon: "badge", label: "Team" },
+  { href: "/business", icon: "business_center", label: "Business & Owner" },
+  { href: "/settings", icon: "settings", label: "Settings" },
+];
+
+export default function Sidebar() {
+  const pathname = usePathname();
+
+  return (
+    <aside className="w-[240px] h-screen fixed left-0 top-0 border-r border-outline-variant bg-surface flex flex-col py-container-margin px-stack-md z-50">
+      {/* Brand */}
+      <div className="px-2 mb-10 flex items-center gap-3">
+        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-on-primary">
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
+            business_center
+          </span>
+        </div>
+        <div>
+          <h1 className="font-headline-sm text-headline-sm font-bold text-primary">Retaila</h1>
+          <p className="text-[10px] text-on-surface-variant uppercase tracking-widest font-semibold">
+            Fintech Intelligence
+          </p>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 space-y-1">
+        {navItems.map((item) => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={
+                isActive
+                  ? "flex items-center gap-3 px-3 py-2.5 rounded-lg text-primary font-bold border-r-2 border-primary bg-surface-container-high transition-all"
+                  : "flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors"
+              }
+            >
+              <span
+                className="material-symbols-outlined"
+                style={isActive ? { fontVariationSettings: "'FILL' 1" } : undefined}
+              >
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Switch Store */}
+      <div className="mt-auto pt-6 border-t border-outline-variant px-2">
+        <button className="w-full py-2 bg-surface-container-high border border-outline-variant text-on-surface-variant rounded-lg flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-all active:scale-[0.95]">
+          <span className="material-symbols-outlined text-[18px]">sync_alt</span>
+          <span className="text-label-caps font-label-caps">Switch Store</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
+</file>
+
+<file path="components/layout/TopBar.tsx">
+"use client";
+
+import { useState } from "react";
+import UserMenu from "./UserMenu";
+
+interface Tab {
+  id: string;
+  label: string;
+}
+
+interface TopBarProps {
+  title: string;
+  tabs?: Tab[];
+  activeTab?: string;
+  onTabChange?: (tabId: string) => void;
+  onDateRangeClick?: () => void;
+  onLocationClick?: () => void;
+}
+
+export default function TopBar({
+  title,
+  tabs = [],
+  activeTab: controlledActiveTab,
+  onTabChange,
+  onDateRangeClick,
+  onLocationClick,
+}: TopBarProps) {
+  const [internalActiveTab, setInternalActiveTab] = useState(
+    tabs.length > 0 ? tabs[0].id : ""
+  );
+  const activeTab = controlledActiveTab ?? internalActiveTab;
+
+  const handleTabClick = (tabId: string) => {
+    setInternalActiveTab(tabId);
+    onTabChange?.(tabId);
+  };
+
+  return (
+    <header className="fixed top-0 left-[240px] right-0 h-16 bg-surface-dim border-b border-outline-variant z-40 flex justify-between items-center px-container-margin">
+      <div className="flex items-center gap-8">
+        <h2 className="font-headline-sm text-headline-sm text-primary">{title}</h2>
+        {tabs.length > 0 && (
+          <nav className="hidden md:flex items-center gap-6">
+            {tabs.map((tab) =>
+              activeTab === tab.id ? (
+                <button
+                  key={tab.id}
+                  className="text-primary font-bold border-b-2 border-primary pb-1"
+                  onClick={() => handleTabClick(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ) : (
+                <button
+                  key={tab.id}
+                  className="text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                  onClick={() => handleTabClick(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              )
+            )}
+          </nav>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4">
+        <button
+          onClick={onDateRangeClick}
+          className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant cursor-pointer hover:bg-surface-container-high"
+        >
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+            calendar_today
+          </span>
+          <span className="text-xs font-medium uppercase tracking-wider">Date Range</span>
+        </button>
+
+        <button
+          onClick={onLocationClick}
+          className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant cursor-pointer hover:bg-surface-container-high"
+        >
+          <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+            location_on
+          </span>
+          <span className="text-xs font-medium uppercase tracking-wider">Location</span>
+        </button>
+
+          <div className="flex items-center gap-3 ml-2">
+            <button className="p-2 text-on-surface-variant hover:text-primary transition-colors relative">
+              <span className="material-symbols-outlined">notifications</span>
+              <span className="absolute top-2 right-2 w-2 h-2 bg-secondary rounded-full"></span>
+            </button>
+            <UserMenu />
+          </div>
+      </div>
+    </header>
+  );
+}
+</file>
+
+<file path="components/layout/UserMenu.tsx">
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { useAuth } from "@/lib/auth/AuthContext";
+
+export default function UserMenu() {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback(() => setIsOpen(false), []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function onMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        close();
+      }
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") close();
+    }
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isOpen, close]);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+    } catch {
+      // ignore
+    }
+    router.push("/login");
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={() => setIsOpen((p) => !p)}
+        className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center border border-outline-variant overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary/40 transition-all"
+      >
+        <Image
+          width={32}
+          height={32}
+          className="w-full h-full object-cover"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAddVBpHUDHPGqRj1yHK-wytD7Ks5IkfVsKrP-UTYRQraAMkYmkCzt4dKE305Ox2jUoSw2Vynz4N_c0Qkr-kXw5JfeTNUE6unApk1C84bQvjizf2-gsBFecOUC9ox5A57Sp27JLv55iGH6ZPeK4srPjpYMcMwiCHVN1RRNtaAvpeWMrMPnmo2_qplRI0wrz91bEXsocs17J9HjDvW-kV6rHOMq5CDljomy_VzJTlGeIjxK_jI2aeYrk"
+          alt="User avatar"
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-56 glass-card rounded-xl shadow-2xl z-50 overflow-hidden">
+          {user && (
+            <div className="px-4 py-3">
+              <p className="text-xs text-on-surface-variant truncate">{user.email}</p>
+              <p className="text-[10px] text-on-surface-variant/50 uppercase tracking-wider mt-0.5">
+                {user.role}
+              </p>
+            </div>
+          )}
+
+          <div className="border-t border-outline-variant" />
+
+          <div className="py-1">
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-error hover:bg-surface-container-high transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loggingOut ? (
+                <span className="material-symbols-outlined text-lg animate-spin">progress_activity</span>
+              ) : (
+                <span className="material-symbols-outlined text-lg">logout</span>
+              )}
+              <span>{loggingOut ? "Logging out..." : "Log out"}</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</file>
+
+<file path="eslint.config.mjs">
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+]);
+
+export default eslintConfig;
+</file>
+
+<file path="lib/api.ts">
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+let _accessToken: string | null = null;
+let _refreshPromise: Promise<string | null> | null = null;
+let _unauthorizedHandler: (() => void) | null = null;
+
+export function setAccessToken(token: string | null) {
+  _accessToken = token;
+}
+
+export function getAccessToken(): string | null {
+  return _accessToken;
+}
+
+export function setUnauthorizedHandler(handler: () => void) {
+  _unauthorizedHandler = handler;
+}
+
+export interface ValidationErrorDetail {
+  field: string;
+  message: string;
+}
+
+export class ApiError extends Error {
+  status: number;
+  errorCode?: string;
+  details?: unknown;
+  validationErrors?: ValidationErrorDetail[];
+
+  constructor(status: number, message: string, errorCode?: string, details?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.errorCode = errorCode;
+    this.details = details;
+    if (Array.isArray(details)) {
+      this.validationErrors = details as ValidationErrorDetail[];
+    }
+  }
+}
+
+interface RequestOptions {
+  method?: string;
+  body?: unknown;
+  params?: Record<string, string | number | boolean | null | undefined>;
+}
+
+async function refreshToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      ...(_accessToken ? { headers: { "Content-Type": "application/json", Authorization: `Bearer ${_accessToken}` } } : {}),
+    });
+
+    if (!res.ok) {
+      _accessToken = null;
+      return null;
+    }
+
+    const json = await res.json();
+    const newToken: string | undefined = json.data?.access_token;
+    if (newToken) {
+      _accessToken = newToken;
+      return newToken;
+    }
+
+    _accessToken = null;
+    return null;
+  } catch {
+    _accessToken = null;
+    return null;
+  }
+}
+
+async function attemptRefresh(): Promise<string | null> {
+  if (!_refreshPromise) {
+    _refreshPromise = refreshToken().finally(() => {
+      _refreshPromise = null;
+    });
+  }
+  return _refreshPromise;
+}
+
+async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const { method = "GET", body, params } = options;
+
+  const url = new URL(`${BASE_URL}${endpoint}`);
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && value !== "") {
+        url.searchParams.set(key, String(value));
+      }
+    });
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (_accessToken) {
+    headers["Authorization"] = `Bearer ${_accessToken}`;
+  }
+
+  let res = await fetch(url.toString(), {
+    method,
+    headers,
+    credentials: "include",
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 401 && _accessToken) {
+    const newToken = await attemptRefresh();
+    if (newToken) {
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(url.toString(), {
+        method,
+        headers,
+        credentials: "include",
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } else {
+      _unauthorizedHandler?.();
+      throw new ApiError(401, "Session expired");
+    }
+  }
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new ApiError(
+      json.status || res.status,
+      json.message || "Request failed",
+      json.error_code,
+      json.details
+    );
+  }
+
+  return json.data as T;
+}
+
+interface ApiResponseEnvelope<T> {
+  status: number;
+  message: string;
+  data: T;
+}
+
+export const api = {
+  get: <T>(endpoint: string, params?: Record<string, string | number | boolean | null | undefined>) =>
+    request<T>(endpoint, { params }),
+  post: <T>(endpoint: string, body?: unknown) =>
+    request<T>(endpoint, { method: "POST", body }),
+  patch: <T>(endpoint: string, body?: unknown) =>
+    request<T>(endpoint, { method: "PATCH", body }),
+  delete: <T>(endpoint: string) =>
+    request<T>(endpoint, { method: "DELETE" }),
+};
+
+// ─── API Types ───
+
+export interface BusinessCashPosition {
+  total_sales: string;
+  total_refunds: string;
+  total_expenses: string;
+  total_vendor_payments: string;
+  business_cash_net: string;
+}
+
+export interface NetPositionResponse {
+  total_sales: string;
+  total_refunds: string;
+  total_expenses: string;
+  total_vendor_payments: string;
+  net_position: string;
+}
+
+export interface WorkingCapitalPosition {
+  tenant_id: string;
+  receivable_from_customers: string;
+  payable_to_vendors: string;
+  net_working_capital: string;
+}
+
+export interface RunwayEstimate {
+  operating_cash: string;
+  avg_daily_burn: string;
+  runway_days: string | null;
+}
+
+export interface BreakEvenEstimate {
+  avg_daily_fixed_costs: string;
+  avg_margin_pct: string;
+  break_even_daily_revenue: string | null;
+}
+
+export interface PaymentMethodBreakdownItem {
+  payment_method: string;
+  transaction_count: number;
+  total_amount: string;
+}
+
+export interface LocationPerformance {
+  location_id: string;
+  location_name: string;
+  total_sales: string;
+  total_refunds: string;
+  total_expenses: string;
+  net_cash_position: string;
+}
+
+export interface CashierRefundAnomaly {
+  user_id: string;
+  user_email?: string;
+  refund_count: number;
+  order_count: number;
+  refund_rate: string;
+  tenant_avg_refund_rate: string;
+  is_refund_anomaly: boolean;
+}
+
+export interface CashierDiscountAnomaly {
+  user_id: string;
+  user_email?: string;
+  order_count: number;
+  discount_usage_count: number;
+  discount_rate: string;
+  tenant_avg_discount_rate: string;
+  is_discount_anomaly: boolean;
+}
+
+// ─── Auth Types ───
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  user: AuthUser;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: string;
+  tenant_id: string;
+}
+
+export interface RegisterWithTokenRequest {
+  token: string;
+  email: string;
+  password: string;
+}
+
+export interface RegisterWithTokenResponse {
+  access_token: string;
+  user: AuthUser;
+}
+
+export interface RefreshResponse {
+  access_token: string;
+}
+
+// ─── Reports API ───
+
+export const reportsApi = {
+  businessCashPosition: (params?: Record<string, string | number | boolean | null | undefined>) =>
+    api.get<BusinessCashPosition>("/api/reports/business-cash-position", params),
+
+  netPosition: (params?: Record<string, string | number | boolean | null | undefined>) =>
+    api.get<NetPositionResponse>("/api/reports/net-position", params),
+
+  workingCapital: () =>
+    api.get<WorkingCapitalPosition>("/api/reports/working-capital"),
+
+  runway: (lookbackDays: number) =>
+    api.get<RunwayEstimate>("/api/reports/runway", { lookback_days: lookbackDays }),
+
+  breakEven: (lookbackDays: number) =>
+    api.get<BreakEvenEstimate>("/api/reports/break-even", { lookback_days: lookbackDays }),
+
+  paymentMethods: (params?: Record<string, string | number | boolean | null | undefined>) =>
+    api.get<PaymentMethodBreakdownItem[]>("/api/reports/payment-methods", params),
+
+  locations: () =>
+    api.get<LocationPerformance[]>("/api/reports/locations"),
+
+  refundAnomalies: (params?: Record<string, string | number | boolean | null | undefined>) =>
+    api.get<CashierRefundAnomaly[]>("/api/reports/anomalies/refunds", params),
+
+  discountAnomalies: (params?: Record<string, string | number | boolean | null | undefined>) =>
+    api.get<CashierDiscountAnomaly[]>("/api/reports/anomalies/discounts", params),
+};
+
+// ─── Auth API ───
+
+export const authApi = {
+  login: (body: LoginRequest) =>
+    api.post<LoginResponse>("/api/auth/login", body),
+
+  registerWithToken: (body: RegisterWithTokenRequest) =>
+    api.post<RegisterWithTokenResponse>("/api/auth/register-with-token", body),
+
+  refresh: () =>
+    api.post<RefreshResponse>("/api/auth/refresh"),
+
+  logout: () =>
+    api.post<void>("/api/auth/logout"),
+};
+</file>
+
+<file path="lib/auth/AuthContext.tsx">
+"use client";
+
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { authApi, setAccessToken, setUnauthorizedHandler, type AuthUser } from "@/lib/api";
+
+interface AuthContextValue {
+  user: AuthUser | null;
+  accessToken: string | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function useAuth(): AuthContextValue {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [accessToken, setAccessTokenState] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setAccessToken(null);
+      setAccessTokenState(null);
+      setUser(null);
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function tryRefresh() {
+      try {
+        const result = await authApi.refresh();
+        if (!cancelled && result) {
+          setAccessToken(result.access_token);
+          setAccessTokenState(result.access_token);
+          setUser((result as { user?: AuthUser }).user ?? user);
+        }
+      } catch {
+        if (!cancelled) {
+          setAccessToken(null);
+          setAccessTokenState(null);
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    tryRefresh();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const result = await authApi.login({ email, password });
+    setAccessToken(result.access_token);
+    setAccessTokenState(result.access_token);
+    setUser(result.user);
+  }, []);
+
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // ignore
+    }
+    setAccessToken(null);
+    setAccessTokenState(null);
+    setUser(null);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ user, accessToken, isLoading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+</file>
+
+<file path="lib/auth/passwordStrength.ts">
+export type StrengthLevel = "none" | "weak" | "fair" | "good" | "strong";
+
+export interface PasswordStrengthResult {
+  level: StrengthLevel;
+  score: number;
+  label: string;
+}
+
+export function getPasswordStrength(password: string): PasswordStrengthResult {
+  if (!password) {
+    return { level: "none", score: 0, label: "No password" };
+  }
+
+  let score = 0;
+
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score += 1;
+  if (/\d/.test(password)) score += 1;
+  if (/[^a-zA-Z0-9]/.test(password)) score += 1;
+
+  if (score <= 1) return { level: "weak", score, label: "Weak" };
+  if (score === 2) return { level: "fair", score, label: "Fair" };
+  if (score === 3) return { level: "good", score, label: "Good" };
+  return { level: "strong", score, label: "Strong" };
+}
+</file>
+
+<file path="lib/useQuery.ts">
+"use client";
+
+import { useReducer, useEffect } from "react";
+
+interface QueryState<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+}
+
+type QueryAction<T> =
+  | { type: "fetch" }
+  | { type: "success"; data: T }
+  | { type: "error"; error: string };
+
+function queryReducer<T>(state: QueryState<T>, action: QueryAction<T>): QueryState<T> {
+  switch (action.type) {
+    case "fetch":
+      return { data: null, loading: true, error: null };
+    case "success":
+      return { data: action.data, loading: false, error: null };
+    case "error":
+      return { data: null, loading: false, error: action.error };
+    default:
+      return state;
+  }
+}
+
+export default function useQuery<T>(
+  fn: () => Promise<T>,
+  deps: unknown[] = []
+): QueryState<T> {
+  const [state, dispatch] = useReducer(queryReducer<T>, {
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    dispatch({ type: "fetch" });
+
+    Promise.resolve(fn())
+      .then((result) => {
+        if (!cancelled) dispatch({ type: "success", data: result });
+      })
+      .catch((err: Error) => {
+        if (!cancelled)
+          dispatch({
+            type: "error",
+            error: err.message || "An error occurred",
+          });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return state;
+}
+</file>
+
+<file path="next.config.mjs">
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+    ],
+  },
+};
+
+export default nextConfig;
+</file>
+
+<file path="package.json">
+{
+  "name": "retaila-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "lucide-react": "^0.487.0",
+    "next": "^16.2.10",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^2.15.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10",
+    "tailwindcss": "^4",
+    "typescript": "^6.0.3"
+  }
+}
+</file>
+
+<file path="postcss.config.mjs">
+const config = {
+  plugins: {
+    "@tailwindcss/postcss": {},
+  },
+};
+
+export default config;
+</file>
+
+<file path="tsconfig.json">
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
+</file>
+
+</files>
