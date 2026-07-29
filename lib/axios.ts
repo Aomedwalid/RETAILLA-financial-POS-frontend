@@ -2,7 +2,7 @@
 
 import axios from "axios";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://llina-store.onrender.com";
 
 let _accessToken: string | null = null;
 let _refreshPromise: Promise<string | null> | null = null;

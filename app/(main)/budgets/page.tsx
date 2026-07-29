@@ -220,7 +220,7 @@ export default function BudgetsPage() {
               {error instanceof Error ? error.message : t("common.unknownError")}
               {error instanceof TypeError && (
                 <span className="block mt-1 text-on-surface-variant/60">
-                  {t("common.somethingWentWrong")} <span className="font-mono">http://localhost:8000</span>
+                  {t("common.somethingWentWrong")} <span className="font-mono">https://llina-store.onrender.com</span>
                 </span>
               )}
             </p>
