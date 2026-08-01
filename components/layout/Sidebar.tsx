@@ -19,7 +19,7 @@ const navItems: NavItem[] = [
   { href: "/discounts", icon: "sell", labelKey: "nav.discounts" },
   { href: "/customers", icon: "group", labelKey: "nav.customers" },
   { href: "/store-credit", icon: "payments", labelKey: "nav.storeCredit" },
-  { href: "/reports", icon: "analytics", labelKey: "nav.reports" },
+  { href: "/money", icon: "savings", labelKey: "nav.money" },
   { href: "/budgets", icon: "account_balance_wallet", labelKey: "nav.budgets" },
   { href: "/expenses", icon: "receipt_long", labelKey: "nav.expenses" },
   { href: "/vendors", icon: "conveyor_belt", labelKey: "nav.vendors" },

@@ -55,7 +55,7 @@ export default function AppShell({ children }: AppShellProps) {
       <main
         ref={mainRef}
         id="main-content"
-        className="flex-1 pt-16 overflow-y-auto transition-all duration-300 ease-in-out"
+        className="relative flex-1 pt-16 overflow-y-auto transition-all duration-300 ease-in-out"
         style={isDesktop ? { marginRight: isExpanded ? "15rem" : "4rem" } : undefined}
         aria-hidden={!isDesktop && isOpen}
       >
