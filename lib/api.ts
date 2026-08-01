@@ -323,9 +323,36 @@ export interface RefreshResponse {
   user?: AuthUser;
 }
 
+// ─── Cash Ledger Types ───
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+}
+
+export interface CashLedgerEntry {
+  id: string;
+  entry_type: string;
+  amount: number | string;
+  reference_table?: string | null;
+  reference_id?: string | null;
+  location_id?: string | null;
+  location_name?: string | null;
+  created_by?: string | null;
+  created_by_email?: string | null;
+  notes?: string | null;
+  created_at: string;
+}
+
 // ─── Reports API ───
 
 export const reportsApi = {
+  cashLedger: (params?: Record<string, string | number | boolean | null | undefined>) =>
+    api.get<PaginatedResponse<CashLedgerEntry>>("/api/reports/cash-ledger", params),
+
   businessCashPosition: (params?: Record<string, string | number | boolean | null | undefined>) =>
     api.get<BusinessCashPosition>("/api/reports/business-cash-position", params),
 

@@ -7,6 +7,7 @@ export const queryKeys = {
     all: ["products"] as const,
     list: (params?: Record<string, unknown>) => [...queryKeys.products.all, "list", params] as const,
     detail: (id: string) => [...queryKeys.products.all, "detail", id] as const,
+    overview: () => [...queryKeys.products.all, "overview"] as const,
     categories: () => [...queryKeys.products.all, "categories"] as const,
     discounts: () => [...queryKeys.products.all, "discounts"] as const,
     history: (id: string, params?: Record<string, unknown>) => [...queryKeys.products.all, "history", id, params] as const,
@@ -56,6 +57,7 @@ export const queryKeys = {
   },
   reports: {
     all: ["reports"] as const,
+    cashLedger: (params?: Record<string, unknown>) => [...queryKeys.reports.all, "cashLedger", params] as const,
     overview: (params?: Record<string, unknown>) => [...queryKeys.reports.all, "overview", params] as const,
     cashPosition: (params?: Record<string, unknown>) => [...queryKeys.reports.all, "cashPosition", params] as const,
     netPosition: (params?: Record<string, unknown>) => [...queryKeys.reports.all, "netPosition", params] as const,
