@@ -8,6 +8,7 @@ import type {
   CreateProductPayload,
   ProductUpdateBody,
   StockAdjust,
+  ProductsOverview,
 } from "./types";
 
 export const productsApi = {
@@ -16,6 +17,9 @@ export const productsApi = {
 
   search: (params?: Record<string, string | number>) =>
     api.get<PaginatedResponse<ProductResponse>>("/api/products/search", params as Record<string, string>),
+
+  getOverview: () =>
+    api.get<ProductsOverview>("/api/products/overview"),
 
   get: (id: string) =>
     api.get<ProductResponse>(`/api/products/${id}`),

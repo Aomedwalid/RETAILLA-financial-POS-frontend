@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useProducts, useProductCategories, useCategories, useToggleCategory } from "@/features/products/hooks";
 import { productsApi, categoriesApi } from "@/features/products/api";
 import type { PaginatedResponse, ProductResponse, Category } from "@/features/products/types";
+import ExportButton, { type ExcelColumn } from "@/components/export/ExportButton";
 import { DynamicProductDetailsModal, DynamicProductForm } from "@/lib/lazy-modals";
 import { formatCurrency } from "@/lib/format";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/lib/auth/AuthContext";
+import InventoryOverviewTab from "@/features/products/components/InventoryOverviewTab";
 
 type ModalState =
   | { type: "none" }
@@ -28,9 +31,11 @@ export default function ProductsPage() {
   const { t } = useTranslation();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "TENANT_ADMIN" || user?.role === "ADMIN";
   const [searchLocal, setSearchLocal] = useState("");
   const [modal, setModal] = useState<ModalState>({ type: "none" });
-  const [activeTab, setActiveTab] = useState<"products" | "categories">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "overview" | "categories">("products");
   const [catPage, setCatPage] = useState(1);
   const [catModal, setCatModal] = useState<CategoryModalState>({ type: "none" });
 
@@ -58,6 +63,34 @@ export default function ProductsPage() {
 
   const size = 10;
 
+  const exportColumns = useMemo<ExcelColumn<ProductResponse>[]>(
+    () => [
+      { header: t("product.name"), value: (p) => p.name },
+      { header: t("product.category"), value: (p) => p.category_name ?? "" },
+      { header: t("product.price"), type: "currency", value: (p) => p.price },
+      { header: t("product.stock"), type: "number", value: (p) => p.stock_quantity },
+      { header: t("product.priceActual"), type: "currency", value: (p) => p.actual_price },
+      { header: t("product.sku"), value: (p) => p.sku },
+      { header: t("product.cost"), type: "currency", value: (p) => p.cost },
+      { header: t("common.date"), type: "date", value: (p) => p.created_at },
+    ],
+    [t]
+  );
+
+  const exportFetch = useCallback(
+    async (page: number, size: number) => {
+      const sortParams = { sort_by: sortBy, sort_order: sortOrder };
+      if (keyword) {
+        return productsApi.search({ keyword, page, size, ...sortParams });
+      }
+      const params: Record<string, string | number | boolean> = { page, size, ...sortParams };
+      if (categoryId) params.category_id = categoryId;
+      if (lowStock === "true") params.low_stock = true;
+      return productsApi.list(params);
+    },
+    [keyword, categoryId, lowStock, sortBy, sortOrder]
+  );
+
   function updateURL(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) params.set(key, value);
@@ -81,25 +114,40 @@ export default function ProductsPage() {
     setCatPage(1);
   }
 
+  function handleViewLowStock() {
+    setActiveTab("products");
+    router.push("/products?low_stock=true", { scroll: false });
+  }
+
   const products = data?.items ?? [];
   const catItems = catData?.items ?? [];
 
   return (
     <div className="p-container-margin flex-1 overflow-y-auto" style={{ scrollbarWidth: "none" }}>
       {/* Page Header */}
-      {activeTab === "products" ? (
+      {activeTab === "overview" ? (
+        <div className="flex justify-between items-end mb-stack-lg">
+          <div>
+            <h2 className="font-headline-md text-headline-md text-on-surface">{t("product.overview.title")}</h2>
+            <p className="text-on-surface-variant mt-1 text-sm">{t("product.overview.description")}</p>
+          </div>
+        </div>
+      ) : activeTab === "products" ? (
         <div className="flex justify-between items-end mb-stack-lg">
           <div>
             <h2 className="font-headline-md text-headline-md text-on-surface">{t("product.title")}</h2>
             <p className="text-on-surface-variant mt-1 text-sm">{t("product.description")}</p>
           </div>
-          <Link
-            href="/products/new"
-            className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:brightness-110 transition-all"
-          >
-            <span className="material-symbols-outlined">add</span>
-            {t("product.newProduct")}
-          </Link>
+          <div className="flex items-center gap-2">
+            <ExportButton columns={exportColumns} fetchPage={exportFetch} fileName="Products" batchSize={100} />
+            <Link
+              href="/products/new"
+              className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:brightness-110 transition-all"
+            >
+              <span className="material-symbols-outlined">add</span>
+              {t("product.newProduct")}
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="flex justify-between items-end mb-stack-lg">
@@ -118,30 +166,53 @@ export default function ProductsPage() {
       )}
 
       {/* Tab Bar */}
-      <div className="flex gap-1 mb-gutter bg-surface-container-low p-1 rounded-xl border border-outline-variant w-fit">
+      <div className="flex gap-8 border-b border-outline-variant overflow-x-auto hide-scroll mb-gutter">
         <button
           onClick={() => { setActiveTab("products"); setCatPage(1); }}
-          className={`px-4 py-2 rounded-lg text-label-caps font-label-caps transition-colors ${
+          className={`relative pb-4 font-label-caps text-label-caps whitespace-nowrap transition-colors ${
             activeTab === "products"
-              ? "bg-primary text-on-primary shadow-sm"
+              ? "text-primary"
               : "text-on-surface-variant hover:text-on-surface"
           }`}
         >
           {t("product.title")}
+          {activeTab === "products" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+          )}
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`relative pb-4 font-label-caps text-label-caps whitespace-nowrap transition-colors ${
+              activeTab === "overview"
+                ? "text-primary"
+                : "text-on-surface-variant hover:text-on-surface"
+            }`}
+          >
+            {t("product.overview.title")}
+            {activeTab === "overview" && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+            )}
+          </button>
+        )}
         <button
           onClick={() => setActiveTab("categories")}
-          className={`px-4 py-2 rounded-lg text-label-caps font-label-caps transition-colors ${
+          className={`relative pb-4 font-label-caps text-label-caps whitespace-nowrap transition-colors ${
             activeTab === "categories"
-              ? "bg-primary text-on-primary shadow-sm"
+              ? "text-primary"
               : "text-on-surface-variant hover:text-on-surface"
           }`}
         >
           {t("product.category")}
+          {activeTab === "categories" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+          )}
         </button>
       </div>
 
-      {activeTab === "products" ? (
+      {activeTab === "overview" ? (
+        <InventoryOverviewTab onViewLowStock={handleViewLowStock} />
+      ) : activeTab === "products" ? (
         <>
           {/* Filter Section */}
           <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant flex flex-wrap items-center gap-4 mb-gutter">

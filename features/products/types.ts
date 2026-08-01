@@ -32,6 +32,22 @@ export interface ProductResponse {
   discount_percent: number | null;
 }
 
+export interface ProductsOverview {
+  total_products: number;
+  active_products: number;
+  inactive_products: number;
+  in_stock_products: number;
+  out_of_stock_products: number;
+  low_stock_products: number;
+  total_units_in_stock: number;
+  inventory_cost: string;
+  inventory_retail_value: string;
+  expected_gross_profit: string;
+  expected_profit_margin: number;
+  average_product_cost: string;
+  average_product_price: string;
+}
+
 export interface Category {
   id: string;
   name: string;

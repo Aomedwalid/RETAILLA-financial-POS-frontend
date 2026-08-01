@@ -40,6 +40,14 @@ export function useProducts(params: {
   });
 }
 
+export function useProductsOverview() {
+  return useQuery({
+    queryKey: queryKeys.products.overview(),
+    queryFn: () => productsApi.getOverview(),
+    staleTime: 30_000,
+  });
+}
+
 export function useCategories(params: { page: number; size?: number }, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...queryKeys.products.categories(), "list", params],
