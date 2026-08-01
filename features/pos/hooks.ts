@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { posApi } from "./api";
 import { productsApi } from "@/features/products/api";
@@ -85,6 +85,12 @@ export function usePosProducts() {
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
   const search = useCallback((val: string) => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => {
@@ -125,6 +131,7 @@ export function useCart() {
   const queryClient = useQueryClient();
   const requestSeqRef = useRef(0);
   const [customerScBalance, setCustomerScBalance] = useState(0);
+  const [customerId, setCustomerId] = useState<string | null>(null);
 
   const cartQ = useQuery({
     queryKey: queryKeys.pos.cart(),
@@ -134,7 +141,6 @@ export function useCart() {
   });
 
   const invalidateCart = useCallback(() => {
-    setCustomerScBalance(0);
     queryClient.invalidateQueries({ queryKey: queryKeys.pos.cart() });
   }, [queryClient]);
 
@@ -175,6 +181,7 @@ export function useCart() {
   }, [performCartMutation, cartQ.data?.items]);
 
   const fetchScBalance = useCallback(async (customerId: string) => {
+    setCustomerId(customerId);
     try {
       const result = await posApi.getStoreCreditBalance(customerId);
       const balance = parseFloat(result.balance) || 0;
@@ -186,7 +193,9 @@ export function useCart() {
     }
   }, []);
 
-  const scBalance = customerScBalance > 0 ? customerScBalance : (cartQ.data?.scBalance ?? 0);
+  const clearCustomer = useCallback(() => setCustomerId(null), []);
+
+  const scBalance = customerId != null ? customerScBalance : (cartQ.data?.scBalance ?? 0);
 
   return {
     cart: cartQ.data?.cart ?? null,
@@ -202,5 +211,6 @@ export function useCart() {
     removePromo,
     clearCart,
     fetchScBalance,
+    clearCustomer,
   };
 }

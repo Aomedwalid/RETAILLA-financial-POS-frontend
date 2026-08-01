@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { formatCurrency } from "@/lib/format";
 import type { Cart, CartItem, Customer } from "../types";
@@ -27,7 +27,7 @@ interface CartPanelProps {
 const DEFAULT_MAX_DISCOUNT_PCT = 25;
 const DEFAULT_MAX_DISCOUNT_AMOUNT = 500;
 
-export default function CartPanel({ cart, items, loading, customer, scBalance, onCustomerChange, onUpdateItem, onRemoveItem, onApplyPromo, onRemovePromo, onCheckout, onClearCart }: CartPanelProps) {
+export default memo(function CartPanel({ cart, items, loading, customer, scBalance, onCustomerChange, onUpdateItem, onRemoveItem, onApplyPromo, onRemovePromo, onCheckout, onClearCart }: CartPanelProps) {
   const { t } = useTranslation();
   const [cashAmount, setCashAmount] = useState(0);
   const [storeCreditAmount, setStoreCreditAmount] = useState(0);
@@ -41,7 +41,21 @@ export default function CartPanel({ cart, items, loading, customer, scBalance, o
   const [discountValue, setDiscountValue] = useState(0);
   const [discountReason, setDiscountReason] = useState("");
 
-  const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
+  // Reset the payment/discount form once a sale completes and the cart empties.
+  const hadItemsRef = useRef(false);
+  useEffect(() => {
+    if (!loading && items.length === 0 && hadItemsRef.current) {
+      setCashAmount(0);
+      setStoreCreditAmount(0);
+      setDiscountEnabled(false);
+      setDiscountType("PERCENTAGE");
+      setDiscountValue(0);
+      setDiscountReason("");
+      setError("");
+    }
+    hadItemsRef.current = items.length > 0;
+  }, [loading, items.length]);
+
   const totalDue = cart?.pricing ? parseFloat(cart.pricing.grand_total) : 0;
 
   const computedDiscountAmount = useMemo(() => {
@@ -65,10 +79,11 @@ export default function CartPanel({ cart, items, loading, customer, scBalance, o
     }
     if (cashAmount < 0 || storeCreditAmount < 0) errs.push(t("pos.amountsCannotBeNegative"));
     if (cashAmount <= 0 && storeCreditAmount <= 0) errs.push(t("pos.enterCashOrCredit"));
+    if (cashAmount + storeCreditAmount < effectiveTotal) errs.push(t("pos.insufficientPayment"));
     if (storeCreditAmount > 0 && !customer) errs.push(t("pos.customerRequired"));
     if (storeCreditAmount > scBalance) errs.push(t("pos.insufficientCredit"));
     return errs;
-  }, [totalDue, discountEnabled, discountType, discountValue, cashAmount, storeCreditAmount, customer, scBalance]);
+  }, [totalDue, discountEnabled, discountType, discountValue, cashAmount, storeCreditAmount, customer, scBalance, effectiveTotal, t]);
 
   const canCheckout = totalDue > 0 && (cashAmount > 0 || storeCreditAmount > 0) && !submitting && validationErrors.length === 0;
   const displayError = error || (validationErrors.length > 0 ? validationErrors[0] : "");
@@ -82,8 +97,8 @@ export default function CartPanel({ cart, items, loading, customer, scBalance, o
         cash_amount: cashAmount.toFixed(2),
         store_credit_amount: storeCreditAmount.toFixed(2),
         customer_id: customer?.id ?? undefined,
-        ...(discountEnabled && discountReason.trim()
-          ? { manual_discount_type: discountType, manual_discount_value: discountValue, manual_discount_reason: discountReason.trim() }
+        ...(discountEnabled && discountValue > 0
+          ? { manual_discount_type: discountType, manual_discount_value: discountValue, manual_discount_reason: discountReason.trim() || null }
           : {}),
       });
     } catch (err: unknown) {
@@ -92,6 +107,15 @@ export default function CartPanel({ cart, items, loading, customer, scBalance, o
       const detail = (err as { details?: unknown }).details;
       setError(detail ? `${msg}: ${JSON.stringify(detail)}` : msg);
     } finally { setSubmitting(false); }
+  }
+
+  async function handleClearCart() {
+    setError("");
+    try {
+      await onClearCart();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t("common.somethingWentWrong"));
+    }
   }
 
   if (loading) {
@@ -124,7 +148,7 @@ export default function CartPanel({ cart, items, loading, customer, scBalance, o
           <div className="flex items-center justify-between">
             <h2 className="font-headline-sm text-headline-sm">{t("sale.new")}</h2>
             {items.length > 0 && (
-              <button onClick={onClearCart} className="text-xs font-semibold text-error hover:underline transition-all">{t("cart.clear")}</button>
+              <button onClick={handleClearCart} className="text-xs font-semibold text-error hover:underline transition-all">{t("cart.clear")}</button>
             )}
           </div>
           <div className="relative">
@@ -385,4 +409,4 @@ export default function CartPanel({ cart, items, loading, customer, scBalance, o
       )}
     </>
   );
-}
+});

@@ -27,17 +27,36 @@ export default function RefundModal({ order, onClose, onSuccess }: RefundModalPr
   const [totalRefunded, setTotalRefunded] = useState(0);
   const [variantAttrMap, setVariantAttrMap] = useState<Map<string, Record<string, string | number | boolean>>>(new Map());
 
-  const lineItems = order.line_items || [];
+  const lineItems = useMemo(() => order.line_items || [], [order.line_items]);
+
+  const lineKey = lineItems.map((item) => item.id || "").join("|");
+  const [prevLineKey, setPrevLineKey] = useState(lineKey);
+  if (prevLineKey !== lineKey) {
+    setPrevLineKey(lineKey);
+    const initial: Record<string, LineRefundState> = {};
+    for (const item of lineItems) {
+      if (item.id) {
+        initial[item.id] = { quantity: 0, reason: "" };
+      }
+    }
+    setLineStates(initial);
+  }
 
   useEffect(() => {
-    const map = new Map<string, Record<string, string | number | boolean>>();
+    const needsAttrs = lineItems.some((item) => item.variant_id && !item.variant_name);
+    if (!needsAttrs) return;
+    let cancelled = false;
     productsApi.list({ size: 100, page: 1 })
       .then(async (firstPage) => {
         const allItems = [...firstPage.items];
-        for (let p = 2; p <= firstPage.pages; p++) {
-          const page = await productsApi.list({ size: 100, page: p });
-          allItems.push(...page.items);
+        if (firstPage.pages > 1) {
+          const rest = await Promise.all(
+            Array.from({ length: firstPage.pages - 1 }, (_, i) => productsApi.list({ size: 100, page: i + 2 }))
+          );
+          rest.forEach((pg) => allItems.push(...pg.items));
         }
+        if (cancelled) return;
+        const map = new Map<string, Record<string, string | number | boolean>>();
         for (const prod of allItems) {
           for (const variant of prod.variants) {
             if (variant.attributes && Object.keys(variant.attributes).length > 0) {
@@ -48,16 +67,7 @@ export default function RefundModal({ order, onClose, onSuccess }: RefundModalPr
         setVariantAttrMap(map);
       })
       .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const initial: Record<string, LineRefundState> = {};
-    for (const item of lineItems) {
-      if (item.id) {
-        initial[item.id] = { quantity: 0, reason: "" };
-      }
-    }
-    setLineStates(initial);
+    return () => { cancelled = true; };
   }, [lineItems]);
 
   const updateLine = useCallback((id: string, updates: Partial<LineRefundState>) => {
@@ -73,7 +83,7 @@ export default function RefundModal({ order, onClose, onSuccess }: RefundModalPr
       if (!item.id) continue;
       const state = lineStates[item.id];
       if (state && state.quantity > 0) {
-        const pricePerUnit = item.net_price ? parseFloat(item.net_price) / item.quantity : parseFloat(item.final_price);
+        const pricePerUnit = item.net_price ? parseFloat(item.net_price) : parseFloat(item.final_price);
         total += state.quantity * pricePerUnit;
       }
     }
@@ -194,7 +204,7 @@ export default function RefundModal({ order, onClose, onSuccess }: RefundModalPr
                 const state = lineStates[item.id] || { quantity: 0, reason: "" };
                 const alreadyRefunded = item.refunded_quantity ?? 0;
                 const maxRefund = item.quantity - alreadyRefunded;
-                const pricePerUnit = item.net_price ? parseFloat(item.net_price) / item.quantity : parseFloat(item.final_price);
+                const pricePerUnit = item.net_price ? parseFloat(item.net_price) : parseFloat(item.final_price);
                 const lineTotal = pricePerUnit * state.quantity;
                 const attrs = item.variant_id ? variantAttrMap.get(item.variant_id) : undefined;
                 const variantLabel = item.variant_name || (attrs && Object.keys(attrs).length > 0 ? Object.values(attrs).join(" / ") : null);

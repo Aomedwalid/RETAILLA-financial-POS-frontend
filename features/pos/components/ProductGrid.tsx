@@ -58,9 +58,9 @@ export default function ProductGrid({ products, loading, page, totalPages, total
             <span className="material-symbols-outlined text-[18px]">chevron_right</span>
           </button>
           {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-            const start = Math.max(1, page - 2);
+            const start = Math.max(1, Math.min(page - 2, totalPages - 4));
             const p = start + i;
-            if (p > totalPages) return null;
+            if (p > totalPages || p < 1) return null;
             return (
               <button
                 key={p}

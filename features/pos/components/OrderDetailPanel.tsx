@@ -18,10 +18,11 @@ async function fetchAllProducts() {
   const map = new Map<string, ProductInfo>();
   const firstPage = await productsApi.list({ size: 100, page: 1 });
   const allItems = [...firstPage.items];
-  const totalPages = firstPage.pages;
-  for (let p = 2; p <= totalPages; p++) {
-    const page = await productsApi.list({ size: 100, page: p });
-    allItems.push(...page.items);
+  if (firstPage.pages > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: firstPage.pages - 1 }, (_, i) => productsApi.list({ size: 100, page: i + 2 }))
+    );
+    rest.forEach((pg) => allItems.push(...pg.items));
   }
   for (const prod of allItems) {
     for (const variant of prod.variants) {
@@ -120,10 +121,15 @@ export default function OrderDetailPanel({ orderId, initialOrder, onClose, onRef
   const [productMap, setProductMap] = useState<Map<string, ProductInfo>>(new Map());
   const [detailProductId, setDetailProductId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const [prevOrderId, setPrevOrderId] = useState(orderId);
+  if (prevOrderId !== orderId) {
+    setPrevOrderId(orderId);
     setLoading(true);
     setError("");
+  }
+
+  useEffect(() => {
+    let cancelled = false;
 
     ordersApi.get(orderId)
       .then((full) => { if (!cancelled) setOrder(full); })
@@ -131,13 +137,18 @@ export default function OrderDetailPanel({ orderId, initialOrder, onClose, onRef
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [orderId]);
+  }, [orderId, t]);
 
   useEffect(() => {
-    fetchAllProducts()
-      .then((map) => { setProductMap(map); })
-      .catch(() => {});
-  }, []);
+    const lineItems = order.line_items || [];
+    if (lineItems.length === 0 || lineItems.some((item) => !item.product_name)) {
+      let cancelled = false;
+      fetchAllProducts()
+        .then((map) => { if (!cancelled) setProductMap(map); })
+        .catch(() => {});
+      return () => { cancelled = true; };
+    }
+  }, [order.line_items]);
 
   const lineItems = order.line_items || [];
   const resolvedLineItems = lineItems.map((item) => {

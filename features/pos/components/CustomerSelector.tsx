@@ -18,6 +18,7 @@ export default function CustomerSelector({ selected, onSelect }: CustomerSelecto
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestSeq = useRef(0);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -27,17 +28,31 @@ export default function CustomerSelector({ selected, onSelect }: CustomerSelecto
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, []);
+
   function handleSearch(val: string) {
     setQuery(val);
     if (timer.current) clearTimeout(timer.current);
-    if (!val.trim()) { setResults([]); return; }
+    if (!val.trim()) {
+      requestSeq.current++;
+      setResults([]);
+      return;
+    }
     timer.current = setTimeout(async () => {
+      const seq = ++requestSeq.current;
       setLoading(true);
       try {
         const res = await posApi.searchCustomers(val.trim());
-        setResults(res);
-      } catch { setResults([]); }
-      finally { setLoading(false); }
+        if (seq === requestSeq.current) setResults(res);
+      } catch {
+        if (seq === requestSeq.current) setResults([]);
+      } finally {
+        if (seq === requestSeq.current) setLoading(false);
+      }
     }, 300);
   }
 

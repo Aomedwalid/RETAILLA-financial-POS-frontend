@@ -1,43 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { formatCurrency, formatNumber, formatDateTime, formatDate } from "@/lib/format";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import { ordersApi } from "@/features/orders/api";
-import type { Order, OrdersSummary } from "@/features/orders/types";
+import type { Order } from "@/features/orders/types";
+import ExportButton, { type ExcelColumn } from "@/components/export/ExportButton";
+import { todayStr, daysAgoStr, startOfWeekStr, firstOfMonthStr, firstOfLastMonthStr } from "@/lib/filters/dateRangePresets";
 import OrderDetailPanel from "./OrderDetailPanel";
 import RefundModal from "./RefundModal";
 
 const PAGE_SIZE = 10;
-
-function today() {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function toDateStr(date: Date) {
-  return date.toISOString().split("T")[0];
-}
-
-function mondayOfWeek(date: Date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  return d;
-}
-
-function firstOfMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), 1);
-}
-
-function firstOfLastMonth(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth() - 1, 1);
-}
-
-const DEFAULT_START = toDateStr(firstOfLastMonth(today()));
-const DEFAULT_END = toDateStr(today());
-
-
+const DEFAULT_START = firstOfLastMonthStr();
+const DEFAULT_END = todayStr();
 
 function StatusBadge({ status, t }: { status: string; t: (key: string) => string }) {
   let color = "";
@@ -78,29 +54,31 @@ function SummaryCard({ icon, label, value, color, loading }: { icon: string; lab
 
 export default function OrdersTab() {
   const { t } = useTranslation();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(0);
   const [statusFilter, setStatusFilter] = useState("");
   const [startDate, setStartDate] = useState(DEFAULT_START);
   const [endDate, setEndDate] = useState(DEFAULT_END);
-
-  const [summary, setSummary] = useState<OrdersSummary | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(false);
 
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [refundingOrder, setRefundingOrder] = useState<Order | null>(null);
   const [detailKey, setDetailKey] = useState(0);
 
+  const datePresets = useMemo(
+    () => {
+      const today = todayStr();
+      return [
+        { key: "today", label: t("date.today"), start: daysAgoStr(1), end: today },
+        { key: "week", label: t("date.thisWeek"), start: startOfWeekStr(), end: today },
+        { key: "month", label: t("date.thisMonth"), start: firstOfMonthStr(), end: today },
+      ];
+    },
+    [t]
+  );
+
   const activePreset = useMemo(() => {
-    if (startDate === toDateStr(today()) && endDate === toDateStr(today())) return "today";
-    if (startDate === toDateStr(mondayOfWeek(today())) && endDate === toDateStr(today())) return "week";
-    if (startDate === toDateStr(firstOfMonth(today())) && endDate === toDateStr(today())) return "month";
-    return null;
-  }, [startDate, endDate]);
+    const preset = datePresets.find((p) => p.start === startDate && p.end === endDate);
+    return preset ? preset.key : null;
+  }, [datePresets, startDate, endDate]);
 
   function setDateRange(start: string, end: string) {
     setStartDate(start);
@@ -108,47 +86,73 @@ export default function OrdersTab() {
     setPage(1);
   }
 
-  const fetchOverview = useCallback(async () => {
-    setOverviewLoading(true);
-    try {
-      const params: Record<string, string | number | boolean | null | undefined> = {
+  const ordersParams = useMemo<Record<string, string | number | boolean | null | undefined>>(
+    () => ({
+      page,
+      size: PAGE_SIZE,
+      start_date: `${startDate}T00:00:00Z`,
+      end_date: `${endDate}T23:59:59Z`,
+      ...(statusFilter ? { status: statusFilter } : {}),
+    }),
+    [page, statusFilter, startDate, endDate]
+  );
+
+  const overviewParams = useMemo<Record<string, string | number | boolean | null | undefined>>(
+    () => ({
+      start_date: `${startDate}T00:00:00Z`,
+      end_date: `${endDate}T23:59:59Z`,
+    }),
+    [startDate, endDate]
+  );
+
+  const exportColumns = useMemo<ExcelColumn<Order>[]>(
+    () => [
+      { header: t("common.id"), value: (o) => o.id },
+      {
+        header: t("common.status"),
+        value: (o) => t(`order.status.${o.status}`, { defaultValue: o.status }),
+      },
+      { header: t("common.total"), type: "currency", value: (o) => o.total },
+      { header: t("common.date"), type: "date", value: (o) => o.created_at },
+    ],
+    [t]
+  );
+
+  const exportFetch = useCallback(
+    async (page: number, size: number) =>
+      ordersApi.list({
+        page,
+        size,
         start_date: `${startDate}T00:00:00Z`,
         end_date: `${endDate}T23:59:59Z`,
-      };
-      const result = await ordersApi.getOverview(params);
-      setSummary(result.summary);
-    } catch {
-      setSummary(null);
-    } finally {
-      setOverviewLoading(false);
-    }
-  }, [startDate, endDate]);
+        ...(statusFilter ? { status: statusFilter } : {}),
+      }),
+    [startDate, endDate, statusFilter]
+  );
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params: Record<string, string | number | boolean | null | undefined> = {
-        page, size: PAGE_SIZE,
-        start_date: `${startDate}T00:00:00Z`,
-        end_date: `${endDate}T23:59:59Z`,
-      };
-      if (statusFilter) params.status = statusFilter;
+  const ordersQuery = useQuery({
+    queryKey: ["pos-orders", ordersParams],
+    queryFn: () => ordersApi.list(ordersParams),
+  });
 
-      const result = await ordersApi.list(params);
-      setOrders(result.items);
-      setTotal(result.total);
-      setPages(result.pages);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("common.failedToLoad"));
-      setOrders([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, statusFilter, startDate, endDate]);
+  const overviewQuery = useQuery({
+    queryKey: ["pos-orders-overview", overviewParams],
+    queryFn: () => ordersApi.getOverview(overviewParams),
+  });
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-  useEffect(() => { fetchOverview(); }, [fetchOverview]);
+  const orders = ordersQuery.data?.items ?? [];
+  const total = ordersQuery.data?.total ?? 0;
+  const pages = ordersQuery.data?.pages ?? 0;
+  const loading = ordersQuery.isLoading;
+  const error = ordersQuery.isError
+    ? ordersQuery.error instanceof Error
+      ? ordersQuery.error.message
+      : t("common.failedToLoad")
+    : "";
+
+  const summary = overviewQuery.data?.summary ?? null;
+  const overviewLoading = overviewQuery.isLoading;
+  const refundedCount = (summary?.refunded_orders ?? 0) + (summary?.partially_refunded_orders ?? 0);
 
   function handleFilterChange() {
     setPage(1);
@@ -166,8 +170,8 @@ export default function OrdersTab() {
   function handleRefundSuccess() {
     setRefundingOrder(null);
     setSelectedOrder(null);
-    fetchOrders();
-    fetchOverview();
+    ordersQuery.refetch();
+    overviewQuery.refetch();
   }
 
   function handleClearFilters() {
@@ -176,8 +180,6 @@ export default function OrdersTab() {
     setEndDate(DEFAULT_END);
     setPage(1);
   }
-
-  const refundedCount = (summary?.refunded_orders ?? 0) + (summary?.partially_refunded_orders ?? 0);
 
   return (
     <div className="relative h-full flex flex-col bg-surface">
@@ -241,8 +243,8 @@ export default function OrdersTab() {
               className="bg-surface border border-outline-variant rounded-lg py-1.5 px-2 sm:px-3 text-[10px] sm:text-xs text-on-surface outline-none focus:ring-1 focus:ring-primary max-w-[90px] sm:max-w-none"
             >
               <option value="">{t("common.all")}</option>
-              <option value="completed">{t("pos.completed")}</option>
-              <option value="refunded">{t("pos.refunded")}</option>
+              <option value="COMPLETED">{t("pos.completed")}</option>
+              <option value="REFUNDED">{t("pos.refunded")}</option>
             </select>
           </div>
 
@@ -250,11 +252,7 @@ export default function OrdersTab() {
 
           {/* Date Presets */}
           <div className="flex items-center gap-0.5 sm:gap-1">
-            {[
-              { key: "today", label: t("date.today"), start: toDateStr(today()), end: toDateStr(today()) },
-              { key: "week", label: t("date.thisWeek"), start: toDateStr(mondayOfWeek(today())), end: toDateStr(today()) },
-              { key: "month", label: t("date.thisMonth"), start: toDateStr(firstOfMonth(today())), end: toDateStr(today()) },
-            ].map((preset) => (
+            {datePresets.map((preset) => (
               <button
                 key={preset.key}
                 onClick={() => setDateRange(preset.start, preset.end)}
@@ -280,7 +278,7 @@ export default function OrdersTab() {
               onChange={(e) => { setStartDate(e.target.value); handleFilterChange(); }}
               className="bg-surface border border-outline-variant rounded-lg py-1.5 px-1.5 sm:px-3 text-[10px] sm:text-xs text-on-surface outline-none focus:ring-1 focus:ring-primary [color-scheme:dark] w-[100px] sm:w-auto"
             />
-            <span className="text-outline text-[10px] sm:text-xs">→</span>
+            <span className="inline-block text-outline text-[10px] sm:text-xs rtl:rotate-180">→</span>
             <span className="text-label-caps text-outline text-[10px] hidden sm:inline">{t("common.endDate")}</span>
             <input
               type="date"
@@ -296,6 +294,14 @@ export default function OrdersTab() {
             <span className="font-data-table">{total}</span>
             <span className="hidden sm:inline"> {t("common.items")}</span>
           </div>
+
+          <ExportButton
+            columns={exportColumns}
+            fetchPage={exportFetch}
+            fileName="Orders"
+            batchSize={100}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary/40 transition-colors text-[11px] font-bold"
+          />
 
           {(statusFilter || startDate !== DEFAULT_START || endDate !== DEFAULT_END) && (
             <button onClick={handleClearFilters} className="text-xs text-error hover:underline">
@@ -331,7 +337,7 @@ export default function OrdersTab() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <span className="material-symbols-outlined text-[48px] text-error mb-3">error</span>
             <p className="text-body-md text-error">{error}</p>
-              <button onClick={fetchOrders} className="mt-4 px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold active:scale-95 transition-transform">
+              <button onClick={() => ordersQuery.refetch()} className="mt-4 px-4 py-2 rounded-lg bg-primary text-on-primary text-sm font-bold active:scale-95 transition-transform">
                 {t("common.retry")}
               </button>
           </div>

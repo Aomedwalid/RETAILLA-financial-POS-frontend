@@ -42,7 +42,7 @@ export default function POSPage() {
   } = usePosProducts();
   const {
     cart, items, loading: cartLoading, scBalance, refresh: refreshCart,
-    addItem, removeItem, updateQuantity, applyPromo, removePromo, clearCart, fetchScBalance,
+    addItem, removeItem, updateQuantity, applyPromo, removePromo, clearCart, fetchScBalance, clearCustomer,
   } = useCart();
 
   const [variantModal, setVariantModal] = useState<{ product: POSProduct; variant: POSProductVariant | null; qty: number } | null>(null);
@@ -56,12 +56,14 @@ export default function POSPage() {
     return parseFloat(cart.pricing.grand_total);
   }, [cart]);
 
-  function variantLabel(v: POSProductVariant): string {
-    return Object.entries(v.attributes)
-      .filter(([, val]) => val)
-      .map(([k, val]) => `${k}: ${String(val)}`)
-      .join(", ") || "Default";
-  }
+  const addToCart = useCallback(async (variantId: string, qty: number) => {
+    try {
+      await addItem(variantId, qty);
+      setVariantModal(null);
+    } catch (err: unknown) {
+      setAddError(err instanceof Error ? err.message : t("common.failedToLoad"));
+    }
+  }, [addItem, t]);
 
   const handleProductSelect = useCallback((product: POSProduct) => {
     setAddError("");
@@ -75,25 +77,18 @@ export default function POSPage() {
       return;
     }
     setVariantModal({ product, variant: variants[0], qty: 1 });
-  }, []);
-
-  async function addToCart(variantId: string, qty: number) {
-    try {
-      await addItem(variantId, qty);
-      setVariantModal(null);
-    } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : t("common.failedToLoad"));
-    }
-  }
+  }, [addToCart, t]);
 
   const handleCustomerChange = useCallback((c: Customer | null) => {
     setCustomer(c);
     if (c) {
       fetchScBalance(c.id);
+    } else {
+      clearCustomer();
     }
-  }, [fetchScBalance]);
+  }, [fetchScBalance, clearCustomer]);
 
-  async function handleCheckout(data: { cash_amount: string; store_credit_amount: string; customer_id?: string; manual_discount_type?: "PERCENTAGE" | "FIXED" | null; manual_discount_value?: number | null; manual_discount_reason?: string | null }) {
+  const handleCheckout = useCallback(async (data: { cash_amount: string; store_credit_amount: string; customer_id?: string; manual_discount_type?: "PERCENTAGE" | "FIXED" | null; manual_discount_value?: number | null; manual_discount_reason?: string | null }) => {
     if (!cart) return;
     const result = await posApi.checkout({
       cart_id: cart.id,
@@ -107,13 +102,14 @@ export default function POSPage() {
     setCheckoutResult(result);
     setCartOpen(false);
     refreshCart();
-  }
+  }, [cart, refreshCart]);
 
   const handleNewSale = useCallback(() => {
     setCheckoutResult(null);
     setCustomer(null);
+    clearCustomer();
     refreshCart();
-  }, [refreshCart]);
+  }, [refreshCart, clearCustomer]);
 
   const handleClearCart = useCallback(async () => {
     await clearCart();

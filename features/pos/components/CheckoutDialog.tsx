@@ -18,7 +18,6 @@ function buildReceiptHtml(result: CheckoutResult, t: (key: string) => string): s
   const payments = result.payments || [];
   const lineItems = result.line_items || [];
 
-  const paidTotal = payments.reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
   const cashPayments = payments.filter((p) => p.payment_method === "CASH");
   const cashChange = cashPayments.reduce((sum, p) => sum + parseFloat(p.change_due || "0"), 0);
 
@@ -150,7 +149,7 @@ export default function CheckoutDialog({ result, onNewSale, onClose }: CheckoutD
       win.focus();
       setTimeout(() => win.print(), 300);
     }
-  }, [result]);
+  }, [result, t]);
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
@@ -240,7 +239,7 @@ export default function CheckoutDialog({ result, onNewSale, onClose }: CheckoutD
           <div className="flex-1" />
           <button onClick={printReceipt} className="px-4 py-2.5 rounded-lg border border-outline-variant text-on-surface hover:bg-surface-variant/20 transition-colors text-sm flex items-center gap-1.5">
             <span className="material-symbols-outlined text-sm">receipt</span>
-            {t("pos.pos") || "Receipt"}
+            {t("receipt.title")}
           </button>
           <button onClick={onClose} className="px-4 py-2.5 rounded-lg border border-outline-variant text-on-surface hover:bg-surface-variant/20 transition-colors text-sm">
             {t("pos.orderDetails")}

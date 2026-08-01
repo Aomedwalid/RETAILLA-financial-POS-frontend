@@ -21,10 +21,8 @@ export default function PricingSummary({ pricing, promoCode }: PricingSummaryPro
 
   const productDiscount = safeParse(pricing.total_product_discount);
   const promoDiscount = safeParse(pricing.total_promo_discount);
-  const totalDiscount = (productDiscount + promoDiscount).toFixed(2);
   const hasProductDiscount = productDiscount > 0;
   const hasPromoDiscount = promoDiscount > 0;
-  const hasAnyDiscount = safeParse(totalDiscount) > 0;
 
   return (
     <div className="space-y-3 mb-6">
@@ -42,12 +40,6 @@ export default function PricingSummary({ pricing, promoCode }: PricingSummaryPro
         <div className="flex justify-between text-xs font-medium text-secondary">
           <span>{t("pos.promoCode")} ({promoCode})</span>
           <span className="font-data-table">-{formatCurrency(pricing.total_promo_discount)}</span>
-        </div>
-      )}
-      {hasAnyDiscount && (
-        <div className="flex justify-between text-xs font-medium text-on-surface-variant">
-          <span>{t("pos.pricing.discount")}</span>
-          <span className="font-data-table">-{formatCurrency(totalDiscount)}</span>
         </div>
       )}
       <div className="pt-3 border-t border-outline-variant flex justify-between items-end">

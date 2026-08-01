@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { formatCurrency } from "@/lib/format";
 import type { CartItem as CartItemType } from "../types";
@@ -11,14 +11,21 @@ interface CartItemProps {
   onRemove: (variantId: string) => Promise<unknown>;
 }
 
-export default function CartItemRow({ item, onUpdate, onRemove }: CartItemProps) {
+interface CartLike {
+  pricing?: { lines?: { variant_id: string; quantity: number }[] };
+}
+
+function CartItemRow({ item, onUpdate, onRemove }: CartItemProps) {
+  const { t } = useTranslation();
   const [localQty, setLocalQty] = useState(item.quantity);
+  const [prevServerQty, setPrevServerQty] = useState(item.quantity);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attrEntries = Object.entries(item.attributes).filter(([, v]) => v);
 
-  useEffect(() => {
+  if (prevServerQty !== item.quantity) {
+    setPrevServerQty(item.quantity);
     setLocalQty(item.quantity);
-  }, [item.quantity]);
+  }
 
   useEffect(() => {
     return () => {
@@ -35,7 +42,11 @@ export default function CartItemRow({ item, onUpdate, onRemove }: CartItemProps)
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        await onUpdate(item.variant_id, next);
+        const res = (await onUpdate(item.variant_id, next)) as CartLike | undefined;
+        const line = res?.pricing?.lines?.find((l) => l.variant_id === item.variant_id);
+        if (line && line.quantity !== next) {
+          setLocalQty(line.quantity);
+        }
       } catch {
         setLocalQty(item.quantity);
       }
@@ -67,6 +78,7 @@ export default function CartItemRow({ item, onUpdate, onRemove }: CartItemProps)
             <button
               onClick={() => changeQty(-1)}
               disabled={localQty <= 1}
+              aria-label={t("pos.decreaseQty")}
               className="w-5 h-5 flex items-center justify-center text-on-surface-variant hover:text-on-surface disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-sm">remove</span>
@@ -75,6 +87,7 @@ export default function CartItemRow({ item, onUpdate, onRemove }: CartItemProps)
             <button
               onClick={() => changeQty(1)}
               disabled={localQty >= item.stock_quantity}
+              aria-label={t("pos.increaseQty")}
               className="w-5 h-5 flex items-center justify-center text-on-surface-variant hover:text-on-surface disabled:opacity-30"
             >
               <span className="material-symbols-outlined text-sm">add</span>
@@ -82,6 +95,7 @@ export default function CartItemRow({ item, onUpdate, onRemove }: CartItemProps)
           </div>
           <button
             onClick={() => onRemove(item.variant_id)}
+            aria-label={t("pos.removeItem")}
             className="text-on-surface-variant hover:text-error transition-colors"
           >
             <span className="material-symbols-outlined text-sm">delete</span>
@@ -91,3 +105,17 @@ export default function CartItemRow({ item, onUpdate, onRemove }: CartItemProps)
     </div>
   );
 }
+
+export default memo(CartItemRow, (prev, next) => {
+  return (
+    prev.item.variant_id === next.item.variant_id &&
+    prev.item.product_name === next.item.product_name &&
+    prev.item.variant_name === next.item.variant_name &&
+    prev.item.quantity === next.item.quantity &&
+    prev.item.line_total === next.item.line_total &&
+    prev.item.unit_price === next.item.unit_price &&
+    prev.item.stock_quantity === next.item.stock_quantity &&
+    prev.onUpdate === next.onUpdate &&
+    prev.onRemove === next.onRemove
+  );
+});

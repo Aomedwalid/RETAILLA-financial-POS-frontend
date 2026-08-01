@@ -11,7 +11,6 @@ interface ProductCardProps {
 
 export default function ProductCard({ product, onSelect }: ProductCardProps) {
   const { t } = useTranslation();
-  const hasVariants = product.variants && product.variants.length > 1;
   const isLowStock = product.is_low_stock ?? (product.stock_quantity > 0 && product.stock_quantity <= product.low_stock_threshold);
 
   return (
@@ -47,6 +46,7 @@ export default function ProductCard({ product, onSelect }: ProductCardProps) {
           </span>
           <button
             onClick={(e) => { e.stopPropagation(); onSelect(product); }}
+            aria-label={t("pos.addToCart")}
             className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center hover:bg-primary hover:text-on-primary transition-all active:scale-95 shrink-0"
           >
             <span className="material-symbols-outlined text-sm">add</span>

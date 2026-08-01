@@ -25,10 +25,6 @@ export default function ProductSearch({ keyword, onSearch, categories, categoryI
             className="w-full bg-surface-container border border-outline-variant rounded-xl pl-12 pr-4 py-3 text-body-md focus:border-primary focus:ring-0 transition-all outline-none"
           />
         </div>
-        <button className="px-4 py-3 bg-surface-container border border-outline-variant rounded-xl flex items-center gap-2 hover:bg-surface-container-high transition-colors">
-          <span className="material-symbols-outlined text-on-surface-variant">filter_list</span>
-          <span className="text-body-md font-medium">{t("common.filter")}</span>
-        </button>
       </div>
       {categories.length > 0 && (
         <div className="flex items-center gap-3 mb-3">
