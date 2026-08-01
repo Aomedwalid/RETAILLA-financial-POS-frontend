@@ -1,6 +1,7 @@
 "use client";
 
 import axios from "axios";
+import { recordActivity } from "./keep-alive";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://llina-store.onrender.com";
 
@@ -60,7 +61,10 @@ async function attemptRefresh(): Promise<string | null> {
 }
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    recordActivity();
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
     if (error.response?.status === 401 && _accessToken && !originalRequest._retry) {

@@ -3,6 +3,7 @@ import { Inter, Space_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import Providers from "@/components/auth/Providers";
 import QueryProvider from "@/lib/query-provider";
 import I18nProvider from "@/lib/i18n/I18nProvider";
+import KeepAliveProvider from "@/components/KeepAliveProvider";
 import "./globals.css";
 
 const materialSymbolsUrl =
@@ -47,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${inter.variable} ${spaceGrotesk.variable} ${ibmPlexMono.variable} font-body-md text-body-md overflow-x-hidden`}
       >
-        <QueryProvider><I18nProvider><Providers>{children}</Providers></I18nProvider></QueryProvider>
+        <QueryProvider><I18nProvider><Providers><KeepAliveProvider>{children}</KeepAliveProvider></Providers></I18nProvider></QueryProvider>
       </body>
     </html>
   );
