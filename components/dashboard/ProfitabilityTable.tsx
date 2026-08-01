@@ -1,33 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { reportsApi } from "@/lib/api";
+import type { ProfitabilityRow } from "@/lib/api";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useDateRange } from "@/lib/filters/DateRangeContext";
-import { formatCurrency } from "@/lib/format";
+import { queryKeys } from "@/lib/query-keys";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
 import { useTranslation } from "react-i18next";
 
-function marginColor(pct: number): string {
-  if (pct >= 50) return "text-secondary";
-  if (pct >= 20) return "text-tertiary";
-  return "text-error";
-}
+type SortKey = "gross_profit" | "units_sold" | "revenue" | "margin_pct";
+type GroupBy = "product" | "category";
 
-function marginBg(pct: number): string {
-  if (pct >= 50) return "bg-secondary/20";
-  if (pct >= 20) return "bg-tertiary/20";
-  return "bg-error/20";
+function marginTone(pct: number): { text: string; bar: string } {
+  if (pct >= 50) return { text: "text-secondary", bar: "bg-secondary/20" };
+  if (pct >= 20) return { text: "text-tertiary", bar: "bg-tertiary/20" };
+  return { text: "text-error", bar: "bg-error/20" };
 }
 
 function barWidth(pct: number): string {
   return `${Math.min(Math.abs(pct), 100)}%`;
 }
 
-type SortKey = "gross_profit" | "units_sold" | "revenue" | "margin_pct";
-type GroupBy = "product" | "category";
-
-export default function ProfitabilityTable() {
+export default function ProfitabilityTable({ maxHeight = "400px" }: { maxHeight?: string }) {
   const { t } = useTranslation();
   const { accessToken } = useAuth();
   const { startDate, endDate } = useDateRange();
@@ -36,22 +32,23 @@ export default function ProfitabilityTable() {
   const [sortAsc, setSortAsc] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["profitability", startDate, endDate, groupBy],
+    queryKey: queryKeys.reports.profitability({ start_date: startDate, end_date: endDate, group_by: groupBy }),
     queryFn: () => reportsApi.profitability({ start_date: startDate, end_date: endDate, group_by: groupBy }),
     enabled: !!accessToken,
   });
 
-  const raw = Array.isArray(data) ? data : [];
-  function getVal(row: typeof raw[number], key: SortKey): number {
-    if (key === "margin_pct") return typeof row.margin_pct === "string" ? parseFloat(row.margin_pct) : row.margin_pct;
-    const field = key === "gross_profit" ? "gross_profit" : key === "revenue" ? "revenue" : key;
-    return parseFloat(String(row[field as keyof typeof row]));
-  }
-  const sorted = [...raw].sort((a, b) => {
-    const av = getVal(a, sortKey);
-    const bv = getVal(b, sortKey);
-    return sortAsc ? av - bv : bv - av;
-  });
+  const sorted = useMemo(() => {
+    const rows: ProfitabilityRow[] = Array.isArray(data) ? data : [];
+    const numericValue = (row: ProfitabilityRow, key: SortKey): number => {
+      if (key === "margin_pct") return typeof row.margin_pct === "string" ? parseFloat(row.margin_pct) : row.margin_pct;
+      return parseFloat(String(row[key]));
+    };
+    return [...rows].sort((a, b) => {
+      const av = numericValue(a, sortKey);
+      const bv = numericValue(b, sortKey);
+      return sortAsc ? av - bv : bv - av;
+    });
+  }, [data, sortKey, sortAsc]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -62,10 +59,8 @@ export default function ProfitabilityTable() {
     }
   }
 
-  function sortArrow(key: SortKey) {
-    if (sortKey !== key) return "";
-    return sortAsc ? " ↑" : " ↓";
-  }
+  const title = t("dashboard.profitability.title");
+  const nameColumn = groupBy === "product" ? t("dashboard.profitability.product") : t("dashboard.profitability.category");
 
   if (isLoading) {
     return (
@@ -87,8 +82,9 @@ export default function ProfitabilityTable() {
   if (error) {
     return (
       <div className="bg-surface-container-low rounded-xl border border-outline-variant p-card-padding">
-        <p className="text-label-caps text-on-surface-variant uppercase mb-6">{t("dashboard.profitability.title")}</p>
+        <p className="text-label-caps text-on-surface-variant uppercase mb-6">{title}</p>
         <div className="flex flex-col items-center justify-center py-8 text-center">
+          <span className="material-symbols-outlined text-[28px] text-on-surface-variant/40 mb-2">error_outline</span>
           <p className="text-xs text-on-surface-variant">{t("dashboard.profitability.failed")}</p>
         </div>
       </div>
@@ -98,25 +94,29 @@ export default function ProfitabilityTable() {
   return (
     <div className="bg-surface-container-low rounded-xl border border-outline-variant p-card-padding">
       <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
-        <p className="text-label-caps text-on-surface-variant uppercase whitespace-nowrap">{t("dashboard.profitability.title")}</p>
-        <div className="bg-surface-container-highest p-1 rounded-lg flex gap-1 shrink-0">
+        <p className="text-label-caps text-on-surface-variant uppercase whitespace-nowrap">{title}</p>
+        <div role="group" aria-label={t("common.filter")} className="bg-surface-container-highest p-1 rounded-lg flex gap-1 shrink-0">
           <button
+            type="button"
+            aria-pressed={groupBy === "product"}
             onClick={() => setGroupBy("product")}
-            className={
+            className={`px-2 sm:px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-colors ${
               groupBy === "product"
-                ? "px-2 sm:px-3 py-1 rounded-md bg-surface-container-low text-[10px] sm:text-xs font-bold text-primary shadow-sm"
-                : "px-2 sm:px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold text-on-surface-variant hover:text-primary"
-            }
+                ? "bg-surface-container-low text-primary shadow-sm"
+                : "text-on-surface-variant hover:text-primary"
+            }`}
           >
             {t("dashboard.profitability.byProduct")}
           </button>
           <button
+            type="button"
+            aria-pressed={groupBy === "category"}
             onClick={() => setGroupBy("category")}
-            className={
+            className={`px-2 sm:px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-colors ${
               groupBy === "category"
-                ? "px-2 sm:px-3 py-1 rounded-md bg-surface-container-low text-[10px] sm:text-xs font-bold text-primary shadow-sm"
-                : "px-2 sm:px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold text-on-surface-variant hover:text-primary"
-            }
+                ? "bg-surface-container-low text-primary shadow-sm"
+                : "text-on-surface-variant hover:text-primary"
+            }`}
           >
             {t("dashboard.profitability.byCategory")}
           </button>
@@ -124,88 +124,117 @@ export default function ProfitabilityTable() {
       </div>
 
       {sorted.length === 0 ? (
-        <div className="flex items-center justify-center py-8 min-h-[200px]">
+        <div className="flex flex-col items-center justify-center py-8 min-h-[200px] text-center">
+          <span className="material-symbols-outlined text-[32px] text-on-surface-variant/40 mb-2">table_rows</span>
           <p className="text-xs text-on-surface-variant">{t("dashboard.profitability.noData")}</p>
         </div>
       ) : (
-        <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar -mx-card-padding sm:mx-0">
-          <table className="w-full text-[11px] sm:text-xs table-auto">
-              <thead>
-                <tr className="text-on-surface-variant uppercase tracking-wider text-[9px] sm:text-[10px] border-b border-outline-variant/30">
-                  <th className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-start min-w-[100px] sm:min-w-[140px]">
-                    {groupBy === "product" ? t("dashboard.profitability.product") : t("dashboard.profitability.category")}
-                  </th>
-                  <th
-                    className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end cursor-pointer hover:text-on-surface hidden sm:table-cell min-w-[60px]"
-                    onClick={() => toggleSort("units_sold")}
-                  >
-                    {t("dashboard.profitability.units")}{sortArrow("units_sold")}
-                  </th>
-                  <th
-                    className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end cursor-pointer hover:text-on-surface min-w-[80px] sm:min-w-[100px]"
-                    onClick={() => toggleSort("revenue")}
-                  >
-                    {t("dashboard.profitability.revenue")}{sortArrow("revenue")}
-                  </th>
-                  <th className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end hidden sm:table-cell min-w-[80px] sm:min-w-[100px]">{t("dashboard.profitability.cogs")}</th>
-                  <th
-                    className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end cursor-pointer hover:text-on-surface min-w-[80px] sm:min-w-[100px]"
-                    onClick={() => toggleSort("gross_profit")}
-                  >
-                    {t("dashboard.profitability.grossProfit")}{sortArrow("gross_profit")}
-                  </th>
-                  <th
-                    className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end cursor-pointer hover:text-on-surface min-w-[70px] sm:min-w-[90px]"
-                    onClick={() => toggleSort("margin_pct")}
-                  >
-                    {t("dashboard.profitability.margin")}{sortArrow("margin_pct")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((row, idx) => {
-                  const revenue = parseFloat(row.revenue);
-                  const cogs = parseFloat(row.cogs);
-                  const gp = parseFloat(row.gross_profit);
-                  const margin = typeof row.margin_pct === "string" ? parseFloat(row.margin_pct) : row.margin_pct;
-                  const name = row.group_name || row.group_id || t("dashboard.profitability.uncategorized");
-                  return (
-                    <tr key={row.group_id || idx} className="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors">
-                      <td className="px-2 sm:px-card-padding py-3 font-medium text-on-surface max-w-[120px] sm:max-w-[180px] lg:max-w-none">
-                        <span className="truncate block">{name}</span>
-                      </td>
-                      <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface hidden sm:table-cell whitespace-nowrap tabular-nums">
-                        {(row.units_sold ?? 0).toLocaleString("ar-EG")}
-                      </td>
-                      <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface whitespace-nowrap tabular-nums">
-                        {formatCurrency(revenue)}
-                      </td>
-                      <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface hidden sm:table-cell whitespace-nowrap tabular-nums">
-                        {formatCurrency(cogs)}
-                      </td>
-                      <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface font-medium whitespace-nowrap tabular-nums">
-                        {formatCurrency(gp)}
-                      </td>
-                      <td className="px-2 sm:px-card-padding py-3 text-end whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1 sm:gap-2">
-                          <div className="w-10 sm:w-12 md:w-16 h-1.5 rounded-full bg-surface-container-highest overflow-hidden shrink-0">
-                            <div
-                              className={`h-full rounded-full ${marginBg(margin)}`}
-                              style={{ width: barWidth(margin) }}
-                            />
-                          </div>
-                          <span className={`font-data-table text-[10px] sm:text-xs font-bold ${marginColor(margin)} tabular-nums`}>
-                            {margin.toLocaleString("ar-EG", { maximumFractionDigits: 1 })}%
-                          </span>
+        <div
+          role="region"
+          aria-label={title}
+          tabIndex={0}
+          className="relative overflow-x-auto overflow-y-auto custom-scrollbar -mx-card-padding sm:mx-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset rounded-lg"
+          style={maxHeight ? { maxHeight } : undefined}
+        >
+          <table className="w-full text-[11px] sm:text-xs table-auto min-w-[560px] sm:min-w-0">
+            <caption className="sr-only">{title}</caption>
+            <thead>
+              <tr className="text-on-surface-variant uppercase tracking-wider text-[9px] sm:text-[10px] border-b border-outline-variant/30">
+                <th scope="col" className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-start min-w-[100px] sm:min-w-[140px]">
+                  {nameColumn}
+                </th>
+                <th
+                  scope="col"
+                  aria-sort={sortKey === "units_sold" ? (sortAsc ? "ascending" : "descending") : undefined}
+                  className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end hidden sm:table-cell min-w-[60px]"
+                >
+                  <button type="button" onClick={() => toggleSort("units_sold")} className="flex items-center gap-0.5 justify-end w-full uppercase tracking-wider hover:text-on-surface transition-colors">
+                    {t("dashboard.profitability.units")}
+                    {sortKey === "units_sold" && <SortArrow asc={sortAsc} />}
+                  </button>
+                </th>
+                <th
+                  scope="col"
+                  aria-sort={sortKey === "revenue" ? (sortAsc ? "ascending" : "descending") : undefined}
+                  className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end min-w-[80px] sm:min-w-[100px]"
+                >
+                  <button type="button" onClick={() => toggleSort("revenue")} className="flex items-center gap-0.5 justify-end w-full uppercase tracking-wider hover:text-on-surface transition-colors">
+                    {t("dashboard.profitability.revenue")}
+                    {sortKey === "revenue" && <SortArrow asc={sortAsc} />}
+                  </button>
+                </th>
+                <th scope="col" className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end hidden sm:table-cell min-w-[80px] sm:min-w-[100px]">
+                  {t("dashboard.profitability.cogs")}
+                </th>
+                <th
+                  scope="col"
+                  aria-sort={sortKey === "gross_profit" ? (sortAsc ? "ascending" : "descending") : undefined}
+                  className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end min-w-[80px] sm:min-w-[100px]"
+                >
+                  <button type="button" onClick={() => toggleSort("gross_profit")} className="flex items-center gap-0.5 justify-end w-full uppercase tracking-wider hover:text-on-surface transition-colors">
+                    {t("dashboard.profitability.grossProfit")}
+                    {sortKey === "gross_profit" && <SortArrow asc={sortAsc} />}
+                  </button>
+                </th>
+                <th
+                  scope="col"
+                  aria-sort={sortKey === "margin_pct" ? (sortAsc ? "ascending" : "descending") : undefined}
+                  className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-end min-w-[70px] sm:min-w-[90px]"
+                >
+                  <button type="button" onClick={() => toggleSort("margin_pct")} className="flex items-center gap-0.5 justify-end w-full uppercase tracking-wider hover:text-on-surface transition-colors">
+                    {t("dashboard.profitability.margin")}
+                    {sortKey === "margin_pct" && <SortArrow asc={sortAsc} />}
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row, idx) => {
+                const margin = typeof row.margin_pct === "string" ? parseFloat(row.margin_pct) : row.margin_pct;
+                const tone = marginTone(margin);
+                const name = row.group_name || row.group_id || t("dashboard.profitability.uncategorized");
+                return (
+                  <tr key={row.group_id || idx} className="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors">
+                    <td className="px-2 sm:px-card-padding py-3 font-medium text-on-surface max-w-[120px] sm:max-w-[180px] lg:max-w-none">
+                      <span className="truncate block" title={name}>{name}</span>
+                    </td>
+                    <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface hidden sm:table-cell whitespace-nowrap tabular-nums">
+                      {formatNumber(row.units_sold ?? 0)}
+                    </td>
+                    <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface whitespace-nowrap tabular-nums">
+                      {formatCurrency(row.revenue)}
+                    </td>
+                    <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface hidden sm:table-cell whitespace-nowrap tabular-nums">
+                      {formatCurrency(row.cogs)}
+                    </td>
+                    <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface font-medium whitespace-nowrap tabular-nums">
+                      {formatCurrency(row.gross_profit)}
+                    </td>
+                    <td className="px-2 sm:px-card-padding py-3 text-end whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1 sm:gap-2">
+                        <div className="w-10 sm:w-12 md:w-16 h-1.5 rounded-full bg-surface-container-highest overflow-hidden shrink-0">
+                          <div className={`h-full rounded-full ${tone.bar}`} style={{ width: barWidth(margin) }} />
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <span className={`font-data-table text-[10px] sm:text-xs font-bold ${tone.text} tabular-nums`}>
+                          {formatPercent(margin)}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
+  );
+}
+
+function SortArrow({ asc }: { asc: boolean }) {
+  return (
+    <span className="material-symbols-outlined text-[12px] leading-none" aria-hidden="true">
+      {asc ? "arrow_upward" : "arrow_downward"}
+    </span>
   );
 }

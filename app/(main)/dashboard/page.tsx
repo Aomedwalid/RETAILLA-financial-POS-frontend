@@ -12,6 +12,7 @@ import {
   DynamicDailySummaryChart,
   DynamicPaymentDistributionDonut,
   DynamicBreakEvenCard,
+  DynamicPnLCard,
   DynamicProfitabilityTable,
   DynamicLocationPerformanceTable,
   DynamicAnomaliesFeed,
@@ -62,8 +63,11 @@ export default function DashboardPage() {
         <div className="col-span-12 lg:col-span-4 grid">
           <Suspense fallback={<DashboardSkeleton />}><DynamicWorkingCapitalGauge /></Suspense>
         </div>
-        <div className="col-span-12 lg:col-span-8 grid">
+        <div className="col-span-12 lg:col-span-4 grid">
           <Suspense fallback={<DashboardSkeleton />}><DynamicCashRunwayCard /></Suspense>
+        </div>
+        <div className="col-span-12 lg:col-span-4 grid">
+          <Suspense fallback={<DashboardSkeleton />}><DynamicBreakEvenCard /></Suspense>
         </div>
 
         <div className="col-span-12 lg:col-span-7 grid">
@@ -74,7 +78,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="col-span-12 lg:col-span-4 grid">
-          <Suspense fallback={<DashboardSkeleton />}><DynamicBreakEvenCard /></Suspense>
+          <Suspense fallback={<DashboardSkeleton />}><DynamicPnLCard /></Suspense>
         </div>
         <div className="col-span-12 lg:col-span-8 grid">
           <Suspense fallback={<DashboardSkeleton />}><DynamicProfitabilityTable /></Suspense>

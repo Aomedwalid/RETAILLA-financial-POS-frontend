@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useDateRange } from "@/lib/filters/DateRangeContext";
-import { presets } from "@/lib/filters/dateRangePresets";
+import { todayStr, daysAgoStr, firstOfMonthStr } from "@/lib/filters/dateRangePresets";
 import { reportsApi } from "@/lib/api";
-import { useAuth } from "@/lib/auth/AuthContext";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useTranslation } from "react-i18next";
 
@@ -14,36 +12,12 @@ interface Props {
   onClose: () => void;
 }
 
-function todayStr(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function daysAgoStr(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 const QUICK_PRESETS = [
   { labelKey: "dashboard.chart.presets.today", get: () => ({ start: todayStr(), end: todayStr() }) },
   { labelKey: "dashboard.chart.presets.yesterday", get: () => ({ start: daysAgoStr(1), end: daysAgoStr(1) }) },
   { labelKey: "dashboard.chart.presets.last7Days", get: () => ({ start: daysAgoStr(6), end: todayStr() }) },
   { labelKey: "dashboard.chart.presets.last30Days", get: () => ({ start: daysAgoStr(29), end: todayStr() }) },
-  { labelKey: "dashboard.chart.presets.thisMonth", get: () => {
-    const t = new Date();
-    const first = new Date(t.getFullYear(), t.getMonth(), 1);
-    const y1 = first.getFullYear();
-    const m1 = String(first.getMonth() + 1).padStart(2, "0");
-    const d1 = String(first.getDate()).padStart(2, "0");
-    return { start: `${y1}-${m1}-${d1}`, end: todayStr() };
-  }},
+  { labelKey: "dashboard.chart.presets.thisMonth", get: () => ({ start: firstOfMonthStr(), end: todayStr() }) },
 ];
 
 export default function DailySummaryModal({ open, onClose }: Props) {

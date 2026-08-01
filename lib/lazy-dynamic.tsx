@@ -52,6 +52,11 @@ export const DynamicBreakEvenCard = dynamic(
   { loading: () => <DashboardCardSkeleton /> }
 );
 
+export const DynamicPnLCard = dynamic(
+  () => import("@/components/reports/PnLCard"),
+  { loading: () => <DashboardCardSkeleton className="min-h-[200px]" /> }
+);
+
 export const DynamicProfitabilityTable = dynamic(
   () => import("@/components/dashboard/ProfitabilityTable"),
   { loading: () => <DashboardCardSkeleton className="min-h-[200px]" /> }
