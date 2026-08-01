@@ -1,106 +1,101 @@
+export interface DateRange {
+  startDate: string;
+  endDate: string;
+}
+
 export interface DatePreset {
   labelKey: string;
-  compute: () => { startDate: string; endDate: string };
+  compute: () => DateRange;
 }
 
-function formatDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function toDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function today(): Date {
+function startOfToday(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-function tomorrow(): Date {
-  const d = today();
-  d.setDate(d.getDate() + 1);
-  return d;
+function shiftDays(date: Date, days: number): Date {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
 }
 
-function daysAgo(n: number): Date {
-  const d = today();
-  d.setDate(d.getDate() - n);
-  return d;
+export function todayStr(): string {
+  return toDateString(startOfToday());
+}
+
+export function daysAgoStr(days: number): string {
+  return toDateString(shiftDays(startOfToday(), -days));
+}
+
+export function startOfWeekStr(): string {
+  const today = startOfToday();
+  const weekday = today.getDay();
+  return toDateString(shiftDays(today, weekday === 0 ? -6 : -(weekday - 1)));
+}
+
+export function firstOfMonthStr(): string {
+  const today = startOfToday();
+  return toDateString(new Date(today.getFullYear(), today.getMonth(), 1));
+}
+
+export function firstOfLastMonthStr(): string {
+  const today = startOfToday();
+  return toDateString(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+}
+
+export function lastNDays(days: number): DateRange {
+  return {
+    startDate: daysAgoStr(days - 1),
+    endDate: todayStr(),
+  };
+}
+
+export function defaultDateRange(): DateRange {
+  return lastNDays(30);
 }
 
 export const presets: DatePreset[] = [
-  {
-    labelKey: "date.presets.last7Days",
-    compute: () => ({
-      startDate: formatDate(daysAgo(6)),
-      endDate: formatDate(tomorrow()),
-    }),
-  },
-  {
-    labelKey: "date.presets.last30Days",
-    compute: () => ({
-      startDate: formatDate(daysAgo(29)),
-      endDate: formatDate(tomorrow()),
-    }),
-  },
-  {
-    labelKey: "date.presets.last90Days",
-    compute: () => ({
-      startDate: formatDate(daysAgo(89)),
-      endDate: formatDate(tomorrow()),
-    }),
-  },
-  {
-    labelKey: "date.presets.thisMonth",
-    compute: () => {
-      const t = today();
-      return {
-        startDate: formatDate(new Date(t.getFullYear(), t.getMonth(), 1)),
-        endDate: formatDate(tomorrow()),
-      };
-    },
-  },
+  { labelKey: "date.presets.today", compute: () => lastNDays(2) },
+  { labelKey: "date.presets.last7Days", compute: () => lastNDays(7) },
+  { labelKey: "date.presets.last30Days", compute: () => lastNDays(30) },
+  { labelKey: "date.presets.last90Days", compute: () => lastNDays(90) },
+  { labelKey: "date.presets.thisMonth", compute: () => ({ startDate: firstOfMonthStr(), endDate: todayStr() }) },
   {
     labelKey: "date.presets.lastMonth",
     compute: () => {
-      const t = today();
-      const first = new Date(t.getFullYear(), t.getMonth() - 1, 1);
-      const last = new Date(t.getFullYear(), t.getMonth(), 0);
-      return {
-        startDate: formatDate(first),
-        endDate: formatDate(tomorrow()),
-      };
+      const today = startOfToday();
+      const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const last = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { startDate: toDateString(first), endDate: toDateString(last) };
     },
   },
   {
     labelKey: "date.presets.yearToDate",
     compute: () => {
-      const t = today();
-      return {
-        startDate: formatDate(new Date(t.getFullYear(), 0, 1)),
-        endDate: formatDate(tomorrow()),
-      };
+      const today = startOfToday();
+      return { startDate: toDateString(new Date(today.getFullYear(), 0, 1)), endDate: todayStr() };
     },
   },
 ];
 
 export function findMatchingPreset(startDate: string, endDate: string): string | null {
-  for (const p of presets) {
-    const { startDate: ps, endDate: pe } = p.compute();
-    if (ps === startDate && pe === endDate) return p.labelKey;
+  for (const preset of presets) {
+    const range = preset.compute();
+    if (range.startDate === startDate && range.endDate === endDate) return preset.labelKey;
   }
   return null;
 }
 
 export function formatShortLabel(startDate: string, endDate: string): string {
-  const d1 = new Date(startDate + "T00:00:00");
-  const d2 = new Date(endDate + "T00:00:00");
-  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  return `${d1.toLocaleDateString("ar-EG", opts)} – ${d2.toLocaleDateString("ar-EG", opts)}`;
-}
-
-export function last30Days(): { startDate: string; endDate: string } {
-  return {
-    startDate: formatDate(daysAgo(29)),
-    endDate: formatDate(today()),
-  };
+  const from = new Date(`${startDate}T00:00:00`);
+  const to = new Date(`${endDate}T00:00:00`);
+  const options: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  return `${from.toLocaleDateString("ar-EG", options)} – ${to.toLocaleDateString("ar-EG", options)}`;
 }

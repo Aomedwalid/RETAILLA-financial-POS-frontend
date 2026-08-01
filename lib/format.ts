@@ -5,7 +5,9 @@ export function formatCurrency(value: number | string | null | undefined, showSy
   return showSymbol ? `${formatted} ج.م` : formatted;
 }
 
-export function formatPercent(n: number, decimals = 1): string {
+export function formatPercent(value: number | string | null | undefined, decimals = 1): string {
+  const n = typeof value === "string" ? parseFloat(value) : (value ?? 0);
+  if (isNaN(n)) return (0).toLocaleString("ar-EG", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + "%";
   return n.toLocaleString("ar-EG", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + "%";
 }
 
