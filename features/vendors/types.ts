@@ -1,4 +1,7 @@
 // ─── Core entities (snake_case, aligned with backend schemas) ───────────────
+import { formatCurrency } from "@/lib/format";
+
+export const fmt = formatCurrency;
 
 export interface VendorResponse {
   id: string;
@@ -325,14 +328,3 @@ const ACCEPTED_TYPES = [
 export const ACCEPTED_MIME_TYPES = ACCEPTED_TYPES as readonly string[];
 export const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.xlsx,.xls";
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-
-export function fmt(v: string | number | null | undefined): string {
-  if (v == null) return "٠٫٠٠ ج.م";
-  const n = typeof v === "string" ? parseFloat(v) : v;
-  return (
-    (isNaN(n) ? 0 : n).toLocaleString("ar-EG", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }) + " ج.م"
-  );
-}

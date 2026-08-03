@@ -1263,6 +1263,7 @@
   "receipt.scanFailed": "فشل المسح",
   "receipt.pendingReceipts": "إيصالات معلقة",
   "receipt.newReceiptAvailable": "إيصال جديد متاح",
+  "receipt.previewAlt": "معاينة الإيصال المرفوع",
 
   "vendorBill.title": "عنوان الفاتورة",
   "vendorBill.amount": "المبلغ",

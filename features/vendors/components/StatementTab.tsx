@@ -57,7 +57,7 @@ export default function StatementTab({ vendorId }: StatementTabProps) {
         <div className="bg-surface-container-low border border-outline-variant rounded-xl px-5 py-4">
           <p className="text-[10px] text-outline mb-1">{t("vendorStatement.balance")}</p>
           <p className={`font-data-table text-lg font-bold ${owed ? "text-error" : "text-secondary"}`}>
-            {fmtCurrency(balance)}
+            {formatCurrency(balance)}
           </p>
           <p className="text-[10px] text-outline mt-1">
             {owed ? t("vendorStatement.oweVendor") : t("vendorStatement.vendorOwes")}
@@ -65,7 +65,7 @@ export default function StatementTab({ vendorId }: StatementTabProps) {
         </div>
         <div className="bg-surface-container-low border border-outline-variant rounded-xl px-5 py-4">
           <p className="text-[10px] text-outline mb-1">{t("vendorStatement.availableCredit")}</p>
-          <p className="font-data-table text-lg font-bold text-secondary">{fmtCurrency(credit)}</p>
+          <p className="font-data-table text-lg font-bold text-secondary">{formatCurrency(credit)}</p>
           <p className="text-[10px] text-outline mt-1">{t("vendorStatement.creditHint")}</p>
         </div>
         <div className="bg-surface-container-low border border-outline-variant rounded-xl px-5 py-4">
@@ -115,10 +115,10 @@ export default function StatementTab({ vendorId }: StatementTabProps) {
                   <div className="text-right shrink-0">
                     <p className={`font-data-table text-xs font-bold ${positive ? "text-error" : "text-secondary"}`}>
                       {positive ? "+" : ""}
-                      {fmtCurrency(signed)}
+                      {formatCurrency(signed)}
                     </p>
                     <p className="font-data-table text-[10px] text-outline">
-                      {t("vendorStatement.balance")}: {fmtCurrency(toNum(ev.running_balance))}
+                      {t("vendorStatement.balance")}: {formatCurrency(toNum(ev.running_balance))}
                     </p>
                   </div>
                 </div>
@@ -129,8 +129,4 @@ export default function StatementTab({ vendorId }: StatementTabProps) {
       </div>
     </div>
   );
-}
-
-function fmtCurrency(v: number): string {
-  return formatCurrency(v);
 }

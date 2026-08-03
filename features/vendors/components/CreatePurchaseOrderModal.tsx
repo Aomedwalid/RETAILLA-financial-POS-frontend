@@ -8,6 +8,7 @@ import { fmt } from "@/features/vendors/types";
 import type { Category, Discount } from "@/features/products/types";
 import type { ConfirmReceiptResponse } from "@/features/vendors/types";
 import SearchableSelect from "./SearchableSelect";
+import { Field } from "./ui";
 
 export interface VariantForm {
   id: string;
@@ -637,15 +638,6 @@ export default function CreatePurchaseOrderModal({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
-      {children}
     </div>
   );
 }

@@ -4,11 +4,13 @@ import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { vendorsApi } from "@/features/vendors/api";
 import { productsApi, categoriesApi } from "@/features/products/api";
+import { formatCurrency } from "@/lib/format";
 import { ACCEPTED_EXTENSIONS, MAX_FILE_SIZE } from "@/features/vendors/types";
 import type { ReviewLineState, PendingReceiptState } from "@/features/vendors/types";
 import type { Category, Discount } from "@/features/products/types";
 import SearchableSelect from "./SearchableSelect";
 import VariantEditor, { makeEmptyVariant } from "./VariantEditor";
+import { Field, FormSection } from "./ui";
 
 interface ReceiptIngestionModalProps {
   pendingReceipt: PendingReceiptState;
@@ -169,7 +171,7 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
       await onConfirm();
       setConfirmed(true);
       setConfirmResult({
-        billAmount: `$${liveTotal.toFixed(2)}`,
+        billAmount: formatCurrency(liveTotal),
         newProducts: liveNewProductCount,
       });
     } catch (err: unknown) {
@@ -270,7 +272,7 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
               }`}
             >
               {filePreview ? (
-                <img src={filePreview} alt="Receipt preview" className="max-h-48 mx-auto rounded-lg object-contain" />
+                <img src={filePreview} alt={t("receipt.previewAlt")} className="max-h-48 mx-auto rounded-lg object-contain" />
               ) : file ? (
                 <div className="flex flex-col items-center gap-2">
                   <span className="material-symbols-outlined text-[40px] text-primary">description</span>
@@ -351,7 +353,7 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
                       {/* ════════════════════════════════════════ */}
                       {/* SECTION 1: Product Identity            */}
                       {/* ════════════════════════════════════════ */}
-                      <Section title={t("receipt.productIdentity")}>
+                      <FormSection title={t("receipt.productIdentity")}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <Field label={`${t("purchaseOrder.productName")} *`}>
                             <input
@@ -401,53 +403,47 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
                             placeholder={t("purchaseOrder.descriptionPlaceholder")}
                           />
                         </Field>
-                      </Section>
+                      </FormSection>
 
                       {/* ════════════════════════════════════════ */}
                       {/* SECTION 2: Stock & Variants             */}
                       {/* ════════════════════════════════════════ */}
-                      <Section title={t("receipt.stockReceived")}>
+                      <FormSection title={t("receipt.stockReceived")}>
                         <VariantEditor
                           variants={line.variants}
                           onUpdate={(variants) => updateVariant(li, variants)}
                         />
 
                         <div className="flex justify-end text-[11px] text-outline font-data-table border-t border-outline-variant/30 pt-2">
-                          {totalQty} {t("receipt.unit", { count: totalQty })} ${cost.toFixed(2)} {t("receipt.each")} = ${lineTotal.toFixed(2)}
+                          {totalQty} {t("receipt.unit", { count: totalQty })} {formatCurrency(cost)} {t("receipt.each")} = {formatCurrency(lineTotal)}
                         </div>
-                      </Section>
+                      </FormSection>
 
                       {/* ════════════════════════════════════════ */}
                       {/* SECTION 3: Product Pricing              */}
                       {/* ════════════════════════════════════════ */}
-                      <Section title={t("receipt.productPricing")}>
+                      <FormSection title={t("receipt.productPricing")}>
                         <p className="text-[10px] text-outline italic mb-2">
                           {t("receipt.pricingHint")}
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                           <Field label={`${t("purchaseOrder.sellingPrice")} *`}>
-                            <div className="relative">
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
-                              <input
-                                type="number" step="0.01" min="0"
-                                value={line.price}
-                                onChange={(e) => updateLine(li, { price: e.target.value })}
-                                className="w-full h-9 pr-5 pl-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
-                                placeholder={t("purchaseOrder.pricePlaceholder")}
-                              />
-                            </div>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={line.price}
+                              onChange={(e) => updateLine(li, { price: e.target.value })}
+                              className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                              placeholder={t("purchaseOrder.pricePlaceholder")}
+                            />
                           </Field>
                           <Field label={t("receipt.costPerUnit")}>
-                            <div className="relative">
-                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-outline text-xs">$</span>
-                              <input
-                                type="number" step="0.01" min="0"
-                                value={line.cost}
-                                onChange={(e) => updateLine(li, { cost: e.target.value })}
-                                className="w-full h-9 pr-5 pl-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
-                                placeholder={t("purchaseOrder.pricePlaceholder")}
-                              />
-                            </div>
+                            <input
+                              type="number" step="0.01" min="0"
+                              value={line.cost}
+                              onChange={(e) => updateLine(li, { cost: e.target.value })}
+                              className="w-full h-9 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-sm text-on-surface outline-none focus:border-primary font-data-table"
+                              placeholder={t("purchaseOrder.pricePlaceholder")}
+                            />
                           </Field>
                           <Field label={t("purchaseOrder.lowStockThreshold")}>
                             <input
@@ -469,12 +465,12 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
                             />
                           </Field>
                         </div>
-                      </Section>
+                      </FormSection>
 
                       {/* ════════════════════════════════════════ */}
                       {/* SECTION 4: Classification & Notes       */}
                       {/* ════════════════════════════════════════ */}
-                      <Section title={t("receipt.classificationNotes")}>
+                      <FormSection title={t("receipt.classificationNotes")}>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <Field label={t("purchaseOrder.discount")}>
                             <SearchableSelect
@@ -495,14 +491,14 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
                             />
                           </Field>
                         </div>
-                      </Section>
+                      </FormSection>
                     </div>
                   </div>
                 );
               })}
 
               <div className="flex justify-end text-sm font-bold text-on-surface font-data-table border-t border-outline-variant pt-3">
-                {t("receipt.grandTotal")}: ${liveTotal.toFixed(2)}
+                {t("receipt.grandTotal")}: {formatCurrency(liveTotal)}
               </div>
 
               {/* ── Bill Metadata ── */}
@@ -580,27 +576,6 @@ export default function ReceiptIngestionModal({ pendingReceipt, onUpdate, onConf
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h4 className="text-[10px] font-bold uppercase tracking-wider text-outline mb-3 flex items-center gap-2">
-        <span className="w-1 h-3 rounded-full bg-primary/60 shrink-0" />
-        {title}
-      </h4>
-      {children}
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <label className="text-[10px] font-bold uppercase tracking-wider text-outline mb-1 block">{label}</label>
-      {children}
     </div>
   );
 }
