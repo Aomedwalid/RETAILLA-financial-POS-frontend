@@ -2,49 +2,77 @@
 
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { vendorsApi } from "@/features/vendors/api";
-import type { BillResponse, PayBillRequest } from "@/features/vendors/types";
-import { fmt } from "@/features/vendors/types";
+import { usePayBill } from "@/features/vendors/hooks";
+import { formatCurrency } from "@/lib/format";
+import { billNet, toNum } from "@/features/vendors/types";
+import type { BillResponse, PaymentMethod, PaymentChannel } from "@/features/vendors/types";
+import Toast from "@/components/ui/Toast";
 
 interface PayBillModalProps {
   vendorId: string;
   bill: BillResponse;
-  onDone: (updatedBill?: BillResponse) => void;
+  onDone: () => void;
 }
+
+const METHODS: PaymentMethod[] = ["CASH", "DIGITAL", "STORE_CREDIT"];
+const CHANNELS: PaymentChannel[] = ["CASH", "INSTAPAY", "VODAFONE_CASH", "OTHER"];
 
 export default function PayBillModal({ vendorId, bill, onDone }: PayBillModalProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const remVal = parseFloat(bill.amount_remaining || "0");
-  const [amount, setAmount] = useState(String(remVal));
-  const [method, setMethod] = useState("DIGITAL");
+  const payMutation = usePayBill();
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("DIGITAL");
+  const [channel, setChannel] = useState<PaymentChannel>("CASH");
   const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
-  async function handleSubmit() {
+  const remVal = Math.max(0, billNet(bill) - toNum(bill.amount_paid));
+
+  function openModal() {
+    setOpen(true);
+    setAmount(String(remVal > 0 ? remVal : ""));
+    setMethod("DIGITAL");
+    setChannel("CASH");
+    setNotes("");
+    setError("");
+  }
+
+  function handleSubmit() {
     const amt = parseFloat(amount);
     if (!amt || amt <= 0) { setError(t("validation.amountPositive")); return; }
-    if (amt > remVal) { setError(`${t("vendor.pay.exceedsBalance")} ${fmt(bill.amount_remaining)}`); return; }
+    if (amt > remVal) { setError(`${t("vendor.pay.exceedsBalance")} ${formatCurrency(remVal)}`); return; }
     setError("");
-    setSubmitting(true);
-    try {
-      const body: PayBillRequest = { amount: amt, payment_method: method };
-      if (notes.trim()) body.notes = notes.trim();
-      const response = await vendorsApi.payBill(vendorId, bill.id, body);
-      setOpen(false);
-      onDone(response.bill);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("vendor.pay.failed"));
-    } finally {
-      setSubmitting(false);
-    }
+    const body = {
+      amount: amt,
+      payment_method: method,
+      ...(method === "CASH" || method === "DIGITAL" ? { channel } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+    };
+    payMutation.mutate(
+      { vendorId, billId: bill.id, body },
+      {
+        onSuccess: () => {
+          setToast({ message: t("vendor.pay.success"), type: "success" });
+          setOpen(false);
+          onDone();
+        },
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : t("vendor.pay.failed");
+          setError(msg);
+          setToast({ message: msg, type: "error" });
+        },
+      }
+    );
   }
+
+  const submitting = payMutation.isPending;
 
   return (
     <>
-      <button onClick={() => setOpen(true)} className="px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold hover:bg-primary/20 transition-all">
-        {t("vendor.pay")} {fmt(bill.amount_remaining)}
+      <button onClick={openModal} className="px-3 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold hover:bg-primary/20 transition-all">
+        {t("vendor.pay")} {formatCurrency(remVal)}
       </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setOpen(false)}>
@@ -58,23 +86,29 @@ export default function PayBillModal({ vendorId, bill, onDone }: PayBillModalPro
               <div className="bg-surface-container-low rounded-xl p-3 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-on-surface-variant">{bill.bill_reference || `#${bill.id.slice(0, 8)}`}</span>
-                  <p className="text-[10px] text-outline mt-0.5">{fmt(bill.amount_remaining)} {t("vendor.remaining")}</p>
+                  <p className="text-[10px] text-outline mt-0.5">{formatCurrency(remVal)} {t("vendor.remaining")}</p>
                 </div>
-                <span className="font-data-table text-on-surface">{fmt(bill.amount)}</span>
+                <span className="font-data-table text-on-surface">{formatCurrency(billNet(bill))}</span>
               </div>
               <Field label={t("vendor.pay.paymentAmount")}>
-                <div className="relative">
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-outline text-sm">$</span>
-                  <input type="number" step="0.01" min="0.01" max={remVal} value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full h-10 pr-7 pl-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" />
-                </div>
+                <input type="number" step="0.01" min="0.01" max={remVal} value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" />
               </Field>
               <Field label={t("vendor.pay.paymentMethod")}>
-                <select value={method} onChange={(e) => setMethod(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary">
-                  <option value="CASH">{t("paymentMethod.cash")}</option>
-                  <option value="DIGITAL">{t("paymentMethod.digital")}</option>
-                  <option value="BANK_TRANSFER">{t("expense.paymentMethods.BANK_TRANSFER")}</option>
+                <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary">
+                  {METHODS.map((m) => (
+                    <option key={m} value={m}>{t(`paymentMethod.${m}`)}</option>
+                  ))}
                 </select>
               </Field>
+              {(method === "CASH" || method === "DIGITAL") && (
+                <Field label={t("vendor.pay.channel")}>
+                  <select value={channel} onChange={(e) => setChannel(e.target.value as PaymentChannel)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary">
+                    {CHANNELS.map((c) => (
+                      <option key={c} value={c}>{t(`vendorReturn.channel.${c}`)}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <Field label={t("common.notes")}>
                 <input value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder={t("vendor.pay.notesPlaceholder")} />
               </Field>
@@ -84,12 +118,13 @@ export default function PayBillModal({ vendorId, bill, onDone }: PayBillModalPro
               <button onClick={() => setOpen(false)} disabled={submitting} className="px-4 py-2 rounded-lg border border-outline-variant text-sm text-on-surface-variant hover:bg-surface-variant/20">{t("common.cancel")}</button>
               <button onClick={handleSubmit} disabled={submitting} className="px-5 py-2 rounded-lg bg-error text-on-error text-sm font-bold flex items-center gap-2 disabled:opacity-50">
                 {submitting && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
-                {t("vendor.pay")} {fmt(parseFloat(amount) || 0)}
+                {t("vendor.pay")} {formatCurrency(parseFloat(amount) || 0)}
               </button>
             </div>
           </div>
         </div>
       )}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </>
   );
 }

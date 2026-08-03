@@ -25,8 +25,11 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.vendors.all, "detail", id] as const,
     purchaseOrders: (vendorId: string) => [...queryKeys.vendors.all, "purchaseOrders", vendorId] as const,
     bills: (vendorId: string, status?: string) => [...queryKeys.vendors.all, "bills", vendorId, status] as const,
+    bill: (vendorId: string, billId: string) => [...queryKeys.vendors.all, "bill", vendorId, billId] as const,
     overview: (vendorId: string) => [...queryKeys.vendors.all, "overview", vendorId] as const,
+    statement: (vendorId: string) => [...queryKeys.vendors.all, "statement", vendorId] as const,
     outstandingBills: () => [...queryKeys.vendors.all, "outstandingBills"] as const,
+    ledgerImports: (vendorId: string) => [...queryKeys.vendors.all, "ledgerImports", vendorId] as const,
   },
   orders: {
     all: ["orders"] as const,

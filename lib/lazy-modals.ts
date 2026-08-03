@@ -40,6 +40,16 @@ export const DynamicPendingReceiptBubble = dynamic(
   { ssr: false }
 );
 
+export const DynamicVendorReturnModal = dynamic(
+  () => import("@/features/vendors/components/VendorReturnModal"),
+  { ssr: false }
+);
+
+export const DynamicLedgerImportModal = dynamic(
+  () => import("@/features/vendors/components/LedgerImportModal"),
+  { ssr: false }
+);
+
 export const DynamicCustomerForm = dynamic(
   () => import("@/features/customers/components/CustomerForm"),
   { ssr: false }

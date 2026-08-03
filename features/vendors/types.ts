@@ -1,3 +1,5 @@
+// ─── Core entities (snake_case, aligned with backend schemas) ───────────────
+
 export interface VendorResponse {
   id: string;
   tenant_id: string;
@@ -21,17 +23,22 @@ export interface CreateVendorRequest {
   payment_terms_days?: number;
 }
 
+export type PurchaseOrderStatus = "PENDING" | "RECEIVED";
+
 export interface POLineResponse {
+  id: string;
+  po_id: string;
   variant_id: string;
   quantity: number;
   unit_cost: string;
+  created_at: string;
 }
 
 export interface PurchaseOrderResponse {
   id: string;
   tenant_id: string;
   vendor_id: string;
-  status: "PENDING" | "RECEIVED";
+  status: PurchaseOrderStatus;
   notes: string | null;
   created_by: string;
   created_at: string;
@@ -39,9 +46,16 @@ export interface PurchaseOrderResponse {
   lines: POLineResponse[];
 }
 
+export type PaymentMethod = "CASH" | "DIGITAL" | "STORE_CREDIT";
+export type PaymentChannel = "CASH" | "INSTAPAY" | "VODAFONE_CASH" | "OTHER";
+
+export type BillStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
+export type BillStatusDisplay = BillStatus | "OVERDUE";
+
 export interface CreateBillRequest {
   bill_reference?: string;
   amount: number;
+  return_amount?: number;
   due_date?: string;
   notes?: string;
 }
@@ -53,10 +67,12 @@ export interface BillResponse {
   po_id: string | null;
   bill_reference: string | null;
   amount: string;
+  return_amount: string | null;
+  net_amount: string | null;
   amount_paid: string | null;
   amount_remaining: string | null;
   due_date: string | null;
-  status: "UNPAID" | "PARTIALLY_PAID" | "PAID";
+  status: BillStatus;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -64,31 +80,35 @@ export interface BillResponse {
 
 export interface PayBillRequest {
   amount: number;
-  payment_method: string;
+  payment_method: PaymentMethod;
   notes?: string;
+  channel?: PaymentChannel;
+}
+
+export interface VendorPayment {
+  id: string;
+  tenant_id?: string;
+  vendor_bill_id: string;
+  amount: number | string;
+  payment_method: PaymentMethod;
+  channel: PaymentChannel | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
 }
 
 export interface VendorBillPaymentResponse {
-  payment: {
-    id: string;
-    tenant_id: string;
-    vendor_bill_id: string;
-    amount: number;
-    payment_method: string;
-    created_by: string;
-    notes: string | null;
-    created_at: string;
-  };
+  payment: VendorPayment;
   bill: BillResponse;
 }
 
 export interface VendorOverview {
   vendor_id: string;
   vendor_name: string;
-  total_spent: number;
-  total_outstanding: number;
+  total_spent: number | string;
+  total_outstanding: number | string;
   total_bills: number;
-  average_bill_amount: number;
+  average_bill_amount: number | string | null;
   recent_bills: BillResponse[];
 }
 
@@ -96,7 +116,98 @@ export interface OutstandingBill extends BillResponse {
   vendor_name: string;
 }
 
-// ─── Receipt Ingestion Types ───
+// ─── Returns / Credits / Statement ──────────────────────────────────────────
+
+export interface VendorReturnLineRequest {
+  variant_id: string;
+  quantity: number;
+  unit_amount: number;
+}
+
+export interface VendorReturnRequest {
+  lines: VendorReturnLineRequest[];
+  cash_refund_amount?: number;
+  channel?: PaymentChannel;
+  notes?: string;
+}
+
+export interface VendorCredit {
+  amount: number | string;
+  remaining: number | string;
+}
+
+export interface VendorReturnResponse {
+  return_id: string;
+  bill: BillResponse;
+  credit: null | {
+    id: string;
+    amount: number | string;
+    remaining: number | string;
+  };
+  lines: Array<Record<string, unknown>>;
+  returned_total: number | string;
+  cash_refunded_amount: number | string | null;
+}
+
+export type StatementEventType = "PURCHASE_ORDER" | "BILL" | "RETURN" | "PAYMENT";
+
+export interface VendorStatementEvent {
+  event_type: StatementEventType;
+  entity_id: string;
+  created_at: string;
+  amount: number | string;
+  amount_signed: number | string;
+  detail: string | null;
+  running_balance: number | string;
+}
+
+export interface VendorStatement {
+  vendor_id: string;
+  vendor_name: string;
+  balance: number | string;
+  available_credit: number | string;
+  events: VendorStatementEvent[];
+}
+
+// ─── Ledger import (حساب جاري) ──────────────────────────────────────────────
+
+export interface LedgerImportPayment {
+  amount: number;
+  payment_date: string;
+  channel_note?: string;
+}
+
+export interface LedgerPaymentRecord {
+  invoice_ref: string;
+  invoice_amount: number;
+  return_amount: number;
+  payments: LedgerImportPayment[];
+}
+
+export interface LedgerImportRequest {
+  records: LedgerPaymentRecord[];
+  notes?: string;
+}
+
+// Type returned from the (not-live) ledger import endpoint. No invented response
+// model; the submit is confirmed from the request payload, endpoint may 404.
+export type LedgerImportResponse = void;
+
+// ─── Shared helpers ─────────────────────────────────────────────────────────
+
+export function billNet(bill: BillResponse): number {
+  const raw = bill.net_amount ?? bill.amount;
+  const n = parseFloat(String(raw));
+  return isNaN(n) ? 0 : n;
+}
+
+export function toNum(v: number | string | null | undefined): number {
+  if (v == null) return 0;
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return isNaN(n) ? 0 : n;
+}
+
+// ─── Receipt Ingestion Types (kept from legacy feature) ─────────────────────
 
 export interface ExtractedReceiptVariant {
   attributes: Record<string, string>;
@@ -129,11 +240,11 @@ export interface ConfirmedReceiptLine {
   variants: ConfirmedReceiptVariant[];
   price: number;
   cost: number;
-  description: string | null;
+  description: string;
   category_id: string | null;
   discount_id: string | null;
-  low_stock_threshold: number | null;
-  internal_notes: string | null;
+  low_stock_threshold: number;
+  internal_notes: string;
 }
 
 export interface ProcessReceiptResponse {
@@ -145,9 +256,9 @@ export interface ProcessReceiptResponse {
 
 export interface ReceiptConfirmRequest {
   lines: ConfirmedReceiptLine[];
-  bill_reference: string;
+  bill_reference: string | null;
   due_date: string | null;
-  notes: string;
+  notes: string | null;
 }
 
 export interface ConfirmReceiptResponse {
@@ -205,7 +316,12 @@ export interface ReceiptState {
   new_products_count: number;
 }
 
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"] as const;
+const ACCEPTED_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+] as const;
 export const ACCEPTED_MIME_TYPES = ACCEPTED_TYPES as readonly string[];
 export const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.xlsx,.xls";
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -213,5 +329,10 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 export function fmt(v: string | number | null | undefined): string {
   if (v == null) return "٠٫٠٠ ج.م";
   const n = typeof v === "string" ? parseFloat(v) : v;
-  return (isNaN(n) ? 0 : n).toLocaleString("ar-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ج.م";
+  return (
+    (isNaN(n) ? 0 : n).toLocaleString("ar-EG", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }) + " ج.م"
+  );
 }

@@ -1,25 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { vendorsApi } from "@/features/vendors/api";
-import type { OutstandingBill } from "@/features/vendors/types";
-import { fmt } from "@/features/vendors/types";
+import { useOutstandingBills } from "@/features/vendors/hooks";
+import { formatCurrency } from "@/lib/format";
+import { toNum } from "@/features/vendors/types";
 import { formatDate, isOverdue } from "./utils";
 
 export default function OutstandingBillsWidget() {
   const { t } = useTranslation();
-  const [bills, setBills] = useState<OutstandingBill[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: bills = [], isLoading } = useOutstandingBills();
 
-  useEffect(() => {
-    vendorsApi.listOutstandingBills()
-      .then(setBills)
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 animate-pulse space-y-3">
         <div className="h-4 w-32 rounded bg-surface-container-highest/60" />
@@ -52,8 +43,8 @@ export default function OutstandingBillsWidget() {
                 )}
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className="text-outline">{fmt(b.amount_remaining)} {t("vendor.left")}</span>
-                <span className={`font-data-table font-bold ${overdue ? "text-error" : "text-on-surface"}`}>{fmt(b.amount)}</span>
+                <span className="text-outline">{formatCurrency(b.amount_remaining)} {t("vendor.left")}</span>
+                <span className={`font-data-table font-bold ${overdue ? "text-error" : "text-on-surface"}`}>{formatCurrency(toNum(b.amount))}</span>
               </div>
             </div>
           );

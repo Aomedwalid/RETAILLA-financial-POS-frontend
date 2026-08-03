@@ -33,6 +33,7 @@ import {
   DynamicOutstandingBillsWidget,
   DynamicReceiptIngestionModal,
   DynamicPendingReceiptBubble,
+  DynamicLedgerImportModal,
 } from "@/lib/lazy-modals";
 
 function makeEmptyReceipt(vendorId: string, vendorName: string): PendingReceiptState {
@@ -58,6 +59,9 @@ export default function VendorsPage() {
   const [pendingReceipt, setPendingReceipt] = useState<PendingReceiptState | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
+  // Ledger import
+  const [ledgerVendor, setLedgerVendor] = useState<{ id: string; name: string } | null>(null);
+
   const vendorsQ = useVendors();
   const vendors = vendorsQ.data ?? [];
   const loading = vendorsQ.isLoading;
@@ -75,6 +79,10 @@ export default function VendorsPage() {
       lines: [makeEmptyLine()],
     });
     setShowReceiptModal(true);
+  }, []);
+
+  const handleLedgerImport = useCallback((vendorId: string, vendorName: string) => {
+    setLedgerVendor({ id: vendorId, name: vendorName });
   }, []);
 
   const handleReceiptUpdate = useCallback((patch: Partial<PendingReceiptState>) => {
@@ -185,8 +193,18 @@ export default function VendorsPage() {
             }}
             onUploadReceipt={handleUploadReceipt}
             onManualReceipt={handleManualReceipt}
+            onLedgerImport={handleLedgerImport}
           />
         </div>
+      )}
+
+      {/* ── Ledger Import Modal ── */}
+      {ledgerVendor && (
+        <DynamicLedgerImportModal
+          vendorId={ledgerVendor.id}
+          vendorName={ledgerVendor.name}
+          onClose={() => setLedgerVendor(null)}
+        />
       )}
 
       {/* ── Receipt Modal (Upload / Review / Confirmed) ── */}

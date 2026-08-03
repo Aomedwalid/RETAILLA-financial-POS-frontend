@@ -1,20 +1,26 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import type { VendorResponse, VendorOverview, OutstandingBill } from "@/features/vendors/types";
-import { fmt } from "@/features/vendors/types";
+import { useVendorOverview, useVendorStatement, useOutstandingBills } from "@/features/vendors/hooks";
+import { formatCurrency } from "@/lib/format";
+import { toNum } from "@/features/vendors/types";
+import type { VendorResponse } from "@/features/vendors/types";
 import { formatDate } from "./utils";
 
 interface OverviewTabProps {
   vendor: VendorResponse;
-  overview: VendorOverview | null;
-  loading: boolean;
-  outstandingBills: OutstandingBill[];
 }
 
-export default function OverviewTab({ vendor, overview, loading, outstandingBills }: OverviewTabProps) {
+export default function VendorOverviewTab({ vendor }: OverviewTabProps) {
   const { t } = useTranslation();
-  const bal = vendor.outstanding_balance ? parseFloat(vendor.outstanding_balance) : 0;
+  const { data: overview, isLoading, isError } = useVendorOverview(vendor.id);
+  const { data: statement } = useVendorStatement(vendor.id);
+  const { data: allOutstanding = [] } = useOutstandingBills();
+
+  const bal = toNum(vendor.outstanding_balance);
+  const outstandingBills = allOutstanding.filter((b) => b.vendor_id === vendor.id);
+  const availableCredit = toNum(statement?.available_credit);
+
   return (
     <div className="p-5 space-y-5">
       {/* Vendor Info Card */}
@@ -27,13 +33,14 @@ export default function OverviewTab({ vendor, overview, loading, outstandingBill
           <InfoRow label={t("common.email")} value={vendor.contact_email || "\u2014"} />
           <InfoRow label={t("common.phone")} value={vendor.contact_phone || "\u2014"} />
           <InfoRow label={t("vendor.paymentTerms")} value={vendor.payment_terms_days ? `${vendor.payment_terms_days} ${t("common.day")}` : "\u2014"} />
-          <InfoRow label={t("vendor.outstandingBalance")} value={fmt(bal)} mono />
+          <InfoRow label={t("vendor.outstandingBalance")} value={formatCurrency(bal)} mono />
           <InfoRow label={t("customer.lastPurchase")} value={formatDate(vendor.last_purchase_at)} />
+          <InfoRow label={t("vendorStatement.availableCredit")} value={formatCurrency(availableCredit)} mono />
         </div>
       </div>
 
       {/* Dashboard Stats */}
-      {loading ? (
+      {isLoading ? (
         <div className="bg-surface-container-low border border-outline-variant rounded-xl p-5 animate-pulse space-y-4">
           <div className="h-4 w-24 rounded bg-surface-container-highest/60" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -42,41 +49,17 @@ export default function OverviewTab({ vendor, overview, loading, outstandingBill
             ))}
           </div>
         </div>
-      ) : overview ? (
+      ) : isError || !overview ? null : (
         <div className="bg-surface-container-low border border-outline-variant rounded-xl overflow-hidden">
           <div className="px-5 py-3 bg-surface-container-high border-b border-outline-variant/50">
             <h4 className="text-[10px] font-bold uppercase tracking-wider text-outline">{t("vendor.dashboard")}</h4>
           </div>
           <div className="p-5 space-y-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard
-                label={t("vendor.totalSpent")}
-                value={fmt(overview.total_spent)}
-                icon="payments"
-                color="text-primary"
-                bgColor="bg-primary/10"
-              />
-              <StatCard
-                label={t("vendor.outstanding")}
-                value={fmt(overview.total_outstanding)}
-                icon="account_balance"
-                color="text-error"
-                bgColor="bg-error/10"
-              />
-              <StatCard
-                label={t("vendor.totalBills")}
-                value={String(overview.total_bills)}
-                icon="receipt_long"
-                color="text-on-surface"
-                bgColor="bg-surface-container-highest"
-              />
-              <StatCard
-                label={t("vendor.avgBill")}
-                value={fmt(overview.average_bill_amount)}
-                icon="trending_up"
-                color="text-secondary"
-                bgColor="bg-secondary/10"
-              />
+              <StatCard label={t("vendor.totalSpent")} value={formatCurrency(overview.total_spent)} icon="payments" color="text-primary" bgColor="bg-primary/10" />
+              <StatCard label={t("vendor.outstanding")} value={formatCurrency(overview.total_outstanding)} icon="account_balance" color="text-error" bgColor="bg-error/10" />
+              <StatCard label={t("vendor.totalBills")} value={String(overview.total_bills)} icon="receipt_long" color="text-on-surface" bgColor="bg-surface-container-highest" />
+              <StatCard label={t("vendor.avgBill")} value={formatCurrency(overview.average_bill_amount)} icon="trending_up" color="text-secondary" bgColor="bg-secondary/10" />
             </div>
 
             {overview.recent_bills.length > 0 && (
@@ -99,7 +82,7 @@ export default function OverviewTab({ vendor, overview, loading, outstandingBill
                       {overview.recent_bills.map((b) => (
                         <tr key={b.id}>
                           <td className="py-2 pr-4 text-xs text-on-surface-variant">{b.bill_reference || b.id.slice(0, 8)}</td>
-                          <td className="py-2 pr-4 text-xs font-data-table text-on-surface">{fmt(b.amount)}</td>
+                          <td className="py-2 pr-4 text-xs font-data-table text-on-surface">{formatCurrency(toNum(b.amount))}</td>
                           <td className="py-2 pr-4 text-xs text-outline">{formatDate(b.due_date)}</td>
                           <td className="py-2">
                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
@@ -126,7 +109,7 @@ export default function OverviewTab({ vendor, overview, loading, outstandingBill
             )}
           </div>
         </div>
-      ) : null}
+      )}
 
       {/* Outstanding Bills Alert */}
       {outstandingBills.length > 0 && (
@@ -150,8 +133,8 @@ export default function OverviewTab({ vendor, overview, loading, outstandingBill
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-outline">{fmt(b.amount_remaining)} {t("vendor.remaining")}</span>
-                  <span className="font-data-table text-on-surface font-bold">{fmt(b.amount)}</span>
+                  <span className="text-outline">{formatCurrency(b.amount_remaining)} {t("vendor.remaining")}</span>
+                  <span className="font-data-table text-on-surface font-bold">{formatCurrency(toNum(b.amount))}</span>
                 </div>
               </div>
             ))}

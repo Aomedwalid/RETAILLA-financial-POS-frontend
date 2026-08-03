@@ -1,8 +1,9 @@
+"use client";
+
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { vendorsApi } from "@/features/vendors/api";
-import type { CreateBillRequest } from "@/features/vendors/types";
-import { fmt } from "@/features/vendors/types";
+import { useCreateBill } from "@/features/vendors/hooks";
+import { formatCurrency } from "@/lib/format";
 
 interface CreateBillModalProps {
   vendorId: string;
@@ -16,30 +17,40 @@ export default function CreateBillModal({ vendorId, poId, poTotal, onClose, onCr
   const { t } = useTranslation();
   const [billReference, setBillReference] = useState("");
   const [amount, setAmount] = useState(String(poTotal));
+  const [returnAmount, setReturnAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const createBillMutation = useCreateBill();
 
-  async function handleSubmit() {
-    const amt = parseFloat(amount);
+  const amt = parseFloat(amount);
+  const ret = parseFloat(returnAmount) || 0;
+  const net = (isNaN(amt) ? 0 : amt) - ret;
+
+  function handleSubmit() {
     if (!amt || amt <= 0) { setError(t("validation.amountPositive")); return; }
+    if (ret < 0 || ret > amt) { setError(t("vendor.bill.returnExceeds")); return; }
     setError("");
-    setSubmitting(true);
-    try {
-      const body: CreateBillRequest = { amount: amt };
-      if (billReference.trim()) body.bill_reference = billReference.trim();
-      if (dueDate) body.due_date = new Date(dueDate).toISOString();
-      if (notes.trim()) body.notes = notes.trim();
-      await vendorsApi.createBill(vendorId, poId, body);
-      onCreated();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("vendor.bill.failedToCreate"));
-    } finally {
-      setSubmitting(false);
-    }
+    const body: { bill_reference?: string; amount: number; return_amount?: number; due_date?: string; notes?: string } = { amount: amt };
+    if (billReference.trim()) body.bill_reference = billReference.trim();
+    if (ret > 0) body.return_amount = ret;
+    if (dueDate) body.due_date = new Date(dueDate).toISOString();
+    if (notes.trim()) body.notes = notes.trim();
+    createBillMutation.mutate(
+      { vendorId, poId, body },
+      {
+        onSuccess: () => {
+          onCreated();
+          onClose();
+        },
+        onError: (err) => {
+          setError(err instanceof Error ? err.message : t("vendor.bill.failedToCreate"));
+        },
+      }
+    );
   }
+
+  const submitting = createBillMutation.isPending;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -52,17 +63,24 @@ export default function CreateBillModal({ vendorId, poId, poTotal, onClose, onCr
         <div className="p-6 space-y-4">
           <div className="bg-surface-container-low rounded-xl p-3 flex items-center justify-between text-xs">
             <span className="text-on-surface-variant">PO #{poId.slice(0, 8)}</span>
-            <span className="font-data-table text-on-surface font-semibold">{fmt(poTotal)}</span>
+            <span className="font-data-table text-on-surface font-semibold">{formatCurrency(poTotal)}</span>
           </div>
           <Field label={t("vendor.billReference")}>
             <input value={billReference} onChange={(e) => setBillReference(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" placeholder={t("vendor.billRefPlaceholder")} />
           </Field>
-          <Field label={`${t("common.amount")} *`}>
-            <div className="relative">
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-outline text-sm">$</span>
-              <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full h-10 pr-7 pl-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" />
-            </div>
-          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={`${t("common.amount")} *`}>
+              <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" />
+            </Field>
+            <Field label={t("vendor.bill.returnAmount")}>
+              <input type="number" step="0.01" min="0" value={returnAmount} onChange={(e) => setReturnAmount(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary font-data-table" placeholder="0.00" />
+            </Field>
+          </div>
+          {net > 0 && (
+            <p className="text-[11px] text-outline font-data-table">
+              {t("vendor.bill.netAmount")}: {formatCurrency(net)}
+            </p>
+          )}
           <Field label={t("vendor.dueDate")}>
             <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full h-10 px-3 rounded-lg border border-outline/30 bg-surface-container-high text-on-surface text-sm outline-none focus:border-primary" />
           </Field>

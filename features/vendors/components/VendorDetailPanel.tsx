@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { VendorResponse, VendorOverview, PurchaseOrderResponse, BillResponse, OutstandingBill } from "@/features/vendors/types";
-import { vendorsApi } from "@/features/vendors/api";
+import type { VendorResponse } from "@/features/vendors/types";
 import VendorOverviewTab from "./VendorOverviewTab";
 import VendorPOTab from "./VendorPOTab";
 import VendorBillsTab from "./VendorBillsTab";
+import StatementTab from "./StatementTab";
 import DeactivateVendor from "./DeactivateVendor";
 
 interface VendorDetailPanelProps {
@@ -15,43 +15,18 @@ interface VendorDetailPanelProps {
   onUpdated: () => void;
   onUploadReceipt: (vendorId: string, vendorName: string) => void;
   onManualReceipt: (vendorId: string, vendorName: string) => void;
+  onLedgerImport: (vendorId: string, vendorName: string) => void;
 }
 
-export default function VendorDetailPanel({ vendor, onClose, onUpdated, onUploadReceipt, onManualReceipt }: VendorDetailPanelProps) {
+export default function VendorDetailPanel({ vendor, onClose, onUpdated, onUploadReceipt, onManualReceipt, onLedgerImport }: VendorDetailPanelProps) {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<"overview" | "pos" | "bills">("overview");
-  const [overview, setOverview] = useState<VendorOverview | null>(null);
-  const [pos, setPos] = useState<PurchaseOrderResponse[]>([]);
-  const [bills, setBills] = useState<BillResponse[]>([]);
-  const [outstandingBills, setOutstandingBills] = useState<OutstandingBill[]>([]);
-  const [loadingOverview, setLoadingOverview] = useState(true);
-
-  useEffect(() => {
-    if (tab !== "overview") return;
-    setLoadingOverview(true);
-    Promise.all([
-      vendorsApi.getOverview(vendor.id),
-      vendorsApi.listOutstandingBills(),
-    ]).then(([ov, ob]) => {
-      setOverview(ov);
-      setOutstandingBills(ob.filter((b) => b.vendor_id === vendor.id));
-    }).catch(() => {}).finally(() => setLoadingOverview(false));
-  }, [tab, vendor.id]);
-
-  useEffect(() => {
-    if (tab !== "pos") return;
-    vendorsApi.listPOs(vendor.id).then(setPos).catch(() => setPos([]));
-  }, [tab, vendor.id]);
-
-  useEffect(() => {
-    if (tab !== "bills") return;
-    vendorsApi.listVendorBills(vendor.id).then(setBills).catch(() => setBills([]));
-  }, [tab, vendor.id]);
+  const [tab, setTab] = useState<"overview" | "pos" | "bills" | "statement">("overview");
 
   const tabs = [
     { key: "overview" as const, label: t("vendorDetail.overview") },
     { key: "pos" as const, label: t("vendorDetail.purchaseOrders") },
     { key: "bills" as const, label: t("vendorDetail.bills") },
+    { key: "statement" as const, label: t("vendorStatement.title") },
   ];
 
   return (
@@ -84,33 +59,35 @@ export default function VendorDetailPanel({ vendor, onClose, onUpdated, onUpload
             <span className="material-symbols-outlined text-xs">edit_note</span>
             {t("receipt.manual")}
           </button>
+          <button
+            onClick={() => onLedgerImport(vendor.id, vendor.name)}
+            className="px-3 py-1.5 rounded-lg border border-outline/30 text-on-surface-variant text-[10px] font-bold hover:bg-surface-variant transition-colors flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-xs">account_balance_wallet</span>
+            {t("ledgerImport.title")}
+          </button>
         </div>
       </div>
 
       <div className="shrink-0 flex border-b border-outline-variant px-5 overflow-x-auto">
-        {tabs.map((t) => (
+        {tabs.map((item) => (
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
+            key={item.key}
+            onClick={() => setTab(item.key)}
             className={`px-4 py-3 text-xs font-bold border-b-2 transition-colors ${
-              tab === t.key ? "border-primary text-primary" : "border-transparent text-outline hover:text-on-surface-variant"
+              tab === item.key ? "border-primary text-primary" : "border-transparent text-outline hover:text-on-surface-variant"
             }`}
           >
-            {t.label}
+            {item.label}
           </button>
         ))}
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        {tab === "overview" && (
-          <VendorOverviewTab vendor={vendor} overview={overview} loading={loadingOverview} outstandingBills={outstandingBills} />
-        )}
-        {tab === "pos" && (
-          <VendorPOTab vendorId={vendor.id} vendorName={vendor.name} pos={pos} onUpdated={() => vendorsApi.listPOs(vendor.id).then(setPos)} />
-        )}
-        {tab === "bills" && (
-          <VendorBillsTab vendorId={vendor.id} bills={bills} onUpdated={() => vendorsApi.listVendorBills(vendor.id).then(setBills)} />
-        )}
+        {tab === "overview" && <VendorOverviewTab vendor={vendor} />}
+        {tab === "pos" && <VendorPOTab vendorId={vendor.id} vendorName={vendor.name} />}
+        {tab === "bills" && <VendorBillsTab vendorId={vendor.id} />}
+        {tab === "statement" && <StatementTab vendorId={vendor.id} />}
       </div>
     </div>
   );
