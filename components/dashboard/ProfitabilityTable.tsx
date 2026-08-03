@@ -93,7 +93,7 @@ export default function ProfitabilityTable({ maxHeight = "400px" }: { maxHeight?
 
   return (
     <div className="bg-surface-container-low rounded-xl border border-outline-variant p-card-padding">
-      <div className="flex items-center justify-between mb-4 sm:mb-6 gap-2">
+      <div className="flex flex-wrap items-center justify-between mb-4 sm:mb-6 gap-2">
         <p className="text-label-caps text-on-surface-variant uppercase whitespace-nowrap">{title}</p>
         <div role="group" aria-label={t("common.filter")} className="bg-surface-container-highest p-1 rounded-lg flex gap-1 shrink-0">
           <button
@@ -133,14 +133,14 @@ export default function ProfitabilityTable({ maxHeight = "400px" }: { maxHeight?
           role="region"
           aria-label={title}
           tabIndex={0}
-          className="relative overflow-x-auto overflow-y-auto custom-scrollbar -mx-card-padding sm:mx-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset rounded-lg"
+          className="relative overflow-x-auto overflow-y-auto custom-scrollbar overscroll-x-contain -mx-card-padding sm:mx-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-inset rounded-lg"
           style={maxHeight ? { maxHeight } : undefined}
         >
-          <table className="w-full text-[11px] sm:text-xs table-auto min-w-[560px] sm:min-w-0">
+          <table className="w-full text-[11px] sm:text-xs table-auto min-w-[480px] sm:min-w-0">
             <caption className="sr-only">{title}</caption>
             <thead>
               <tr className="text-on-surface-variant uppercase tracking-wider text-[9px] sm:text-[10px] border-b border-outline-variant/30">
-                <th scope="col" className="sticky top-0 z-10 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-start min-w-[100px] sm:min-w-[140px]">
+                <th scope="col" className="sticky top-0 start-0 z-20 bg-surface px-2 sm:px-card-padding py-2.5 font-bold text-start min-w-[100px] sm:min-w-[140px]">
                   {nameColumn}
                 </th>
                 <th
@@ -195,7 +195,7 @@ export default function ProfitabilityTable({ maxHeight = "400px" }: { maxHeight?
                 const name = row.group_name || row.group_id || t("dashboard.profitability.uncategorized");
                 return (
                   <tr key={row.group_id || idx} className="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors">
-                    <td className="px-2 sm:px-card-padding py-3 font-medium text-on-surface max-w-[120px] sm:max-w-[180px] lg:max-w-none">
+                    <td className="sticky start-0 z-10 bg-surface-container-low border-e border-outline-variant/30 px-2 sm:px-card-padding py-3 font-medium text-on-surface max-w-[120px] sm:max-w-[180px] lg:max-w-none">
                       <span className="truncate block" title={name}>{name}</span>
                     </td>
                     <td className="px-2 sm:px-card-padding py-3 text-end font-data-table text-on-surface hidden sm:table-cell whitespace-nowrap tabular-nums">

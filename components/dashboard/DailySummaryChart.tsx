@@ -74,8 +74,8 @@ export default function DailySummaryChart() {
             <p className="text-xs text-on-surface-variant">{t("dashboard.chart.noData")}</p>
           </div>
         ) : (
-          <div className="-mx-card-padding overflow-auto max-h-[380px] custom-scrollbar">
-              <table className="w-full text-xs">
+          <div className="-mx-card-padding overflow-auto overscroll-x-contain max-h-[380px] custom-scrollbar">
+              <table className="w-full text-xs min-w-[640px]">
                 <thead>
                   <tr className="text-on-surface-variant uppercase tracking-wider text-[10px] border-b border-outline-variant/30 bg-surface">
                     <th className="sticky top-0 z-10 bg-surface px-card-padding py-2 font-bold text-start">{t("dashboard.chart.table.date")}</th>

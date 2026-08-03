@@ -65,7 +65,7 @@ export default function PaymentDistributionDonut() {
         <div className="h-3 w-48 rounded bg-surface-container-highest/60 mb-8" />
         <div className="flex items-center gap-8">
           <div className="w-40 h-40 rounded-full bg-surface-container-highest/40" />
-          <div className="flex-1 space-y-3">
+<div className="w-full sm:flex-1 space-y-3">
             {[1, 2].map((i) => (
               <div key={i} className="h-16 rounded bg-surface-container-highest/60" />
             ))}
@@ -86,7 +86,10 @@ export default function PaymentDistributionDonut() {
     );
   }
 
-  let cumulative = 0;
+  const offsets = percentages.reduce<number[]>((acc, _pct, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + percentages[i - 1]);
+    return acc;
+  }, []);
 
   return (
     <div className="bg-surface-container-low rounded-xl border border-outline-variant p-card-padding">
@@ -95,12 +98,11 @@ export default function PaymentDistributionDonut() {
       </p>
 
       {/* Donut + mini legend */}
-      <div className="flex items-center gap-8 mb-6">
+      <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-8 mb-6">
         <div className="w-40 h-40 relative flex-shrink-0">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
             {percentages.map((pct, i) => {
-              const offset = cumulative;
-              cumulative += pct;
+              const offset = offsets[i] ?? 0;
               return (
                 <path
                   key={items[i].method}
@@ -130,7 +132,7 @@ export default function PaymentDistributionDonut() {
                 </div>
                 <span className="font-data-table text-sm">{percentages[idx].toLocaleString("ar-EG", { maximumFractionDigits: 1 })}%</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-on-surface-variant ml-5">
+              <div className="flex items-center justify-between text-xs text-on-surface-variant ms-5">
                 <span>{formatCurrency(i.amount)}</span>
                 <span>{i.count} {t("dashboard.paymentDistribution.transactions")}</span>
               </div>
@@ -140,7 +142,7 @@ export default function PaymentDistributionDonut() {
       </div>
 
       {/* Summary row */}
-      <div className="border-t border-outline-variant/20 pt-4 grid grid-cols-3 gap-4 text-center">
+      <div className="border-t border-outline-variant/20 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
         <div>
           <p className="text-[10px] uppercase text-on-surface-variant font-bold tracking-wider">{t("dashboard.paymentDistribution.totalRevenue")}</p>
           <p className="font-data-table text-sm text-on-surface">{formatCurrency(totalAmount)}</p>

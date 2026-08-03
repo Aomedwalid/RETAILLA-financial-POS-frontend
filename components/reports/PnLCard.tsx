@@ -18,9 +18,9 @@ type PnLRowProps = { label: string; value: string; tone: string; border: string;
 
 function PnLRow({ label, value, tone, border, bold }: PnLRowProps) {
   return (
-    <div className={cls("flex items-center justify-between py-3 px-4 border-l-4", border)}>
-      <span className={cls("text-sm text-on-surface-variant", bold && "font-bold text-on-surface")}>{label}</span>
-      <span className={cls("font-data-table text-sm font-bold", tone)}>{value}</span>
+    <div className={cls("flex items-center justify-between gap-x-3 py-3 px-4 border-l-4", border)}>
+      <span className={cls("text-sm text-on-surface-variant min-w-0", bold && "font-bold text-on-surface")}>{label}</span>
+      <span className={cls("font-data-table text-sm font-bold shrink-0 whitespace-nowrap", tone)}>{value}</span>
     </div>
   );
 }
@@ -70,9 +70,9 @@ export default function PnLCard() {
             bold={item.bold}
           />
         ))}
-        <div className={cls("flex items-center justify-between py-3.5 px-4 border-l-4", netProfit >= 0 ? "border-l-secondary bg-secondary/10" : "border-l-error bg-error/10")}>
-          <span className="text-sm font-bold text-on-surface">{t("report.netProfit")}</span>
-          <span className={cls("font-data-table text-base font-bold", netProfit >= 0 ? "text-secondary" : "text-error")}>
+        <div className={cls("flex items-center justify-between gap-x-3 py-3.5 px-4 border-l-4", netProfit >= 0 ? "border-l-secondary bg-secondary/10" : "border-l-error bg-error/10")}>
+          <span className="text-sm font-bold text-on-surface min-w-0">{t("report.netProfit")}</span>
+          <span className={cls("font-data-table text-base font-bold shrink-0 whitespace-nowrap", netProfit >= 0 ? "text-secondary" : "text-error")}>
             {fmt(pnl?.net_profit)}
           </span>
         </div>

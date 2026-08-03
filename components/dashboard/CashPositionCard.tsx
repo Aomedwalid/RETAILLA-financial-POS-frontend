@@ -45,16 +45,16 @@ export default function CashPositionCard() {
   return (
     <div className="bg-surface-container-low rounded-xl border border-outline-variant p-card-padding flex flex-col justify-between overflow-hidden relative group">
       <div>
-        <div className="flex justify-between items-start mb-4">
-          <div>
+        <div className="flex flex-wrap justify-between items-start gap-2 mb-4">
+          <div className="min-w-0">
             <p className="text-label-caps text-on-surface-variant uppercase mb-1">
               {t("dashboard.cashPosition.title")}
             </p>
-            <h3 className="font-display-lg text-display-lg font-bold font-data-table">
+            <h3 className="font-display-lg text-3xl sm:text-display-lg font-bold font-data-table break-words">
               {formatCurrency(cash)}
             </h3>
           </div>
-          <div className="flex items-center gap-2 text-secondary bg-secondary/10 px-3 py-1 rounded-full border border-secondary/20">
+          <div className="flex items-center gap-2 text-secondary bg-secondary/10 px-3 py-1 rounded-full border border-secondary/20 shrink-0">
             <span className="material-symbols-outlined text-sm">trending_up</span>
             <span className="text-xs font-bold">+{trend.toLocaleString("ar-EG", { maximumFractionDigits: 1 })}%</span>
           </div>

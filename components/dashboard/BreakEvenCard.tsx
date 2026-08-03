@@ -56,7 +56,7 @@ export default function BreakEvenCard() {
 
   return (
     <div className="bg-surface-container-low rounded-xl border border-outline-variant p-card-padding">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
         <p className="text-label-caps text-on-surface-variant uppercase">{t("dashboard.breakEven")}</p>
         <div className="bg-surface-container-highest p-1 rounded-lg flex gap-1">
           {LOOKBACK_OPTIONS.map((opt) => (
