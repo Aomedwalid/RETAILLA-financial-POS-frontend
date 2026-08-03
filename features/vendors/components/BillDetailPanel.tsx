@@ -28,10 +28,10 @@ export default function BillDetailPanel({ vendorId, bill, onOpenPay, onOpenRetur
   const remaining = Math.max(0, toNum(bill.amount_remaining));
 
   const returns = (statement?.events ?? []).filter(
-    (e) => e.event_type === "RETURN" && String(e.detail) === bill.id
+    (e) => e.event_type === "RETURN" && e.entity_id === bill.id
   );
   const payments = (statement?.events ?? []).filter(
-    (e) => e.event_type === "PAYMENT"
+    (e) => e.event_type === "PAYMENT" && e.entity_id === bill.id
   );
 
   return (

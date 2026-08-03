@@ -90,7 +90,11 @@ export default function VendorOverviewTab({ vendor }: OverviewTabProps) {
                               b.status === "PARTIALLY_PAID" ? "bg-[#d99c00]/10 text-[#d99c00]" :
                               "bg-error/10 text-error"
                             }`}>
-                              {b.status === "PARTIALLY_PAID" ? t("vendor.status.partial") : b.status.charAt(0) + b.status.slice(1).toLowerCase()}
+                              {b.status === "PAID"
+                                ? t("vendor.status.paid")
+                                : b.status === "PARTIALLY_PAID"
+                                  ? t("vendor.status.partial")
+                                  : t("vendor.status.unpaid")}
                             </span>
                           </td>
                         </tr>

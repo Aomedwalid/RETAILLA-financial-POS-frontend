@@ -1,4 +1,4 @@
-import type { VendorReturnLineRequest, LedgerImportRequest, LedgerPaymentRecord } from "./types";
+import type { LedgerPaymentRecord } from "./types";
 
 type TFunction = (key: string, options?: Record<string, unknown>) => string;
 
@@ -25,9 +25,9 @@ export function validateVendorReturn(
     if (!Number.isFinite(unit) || unit < 0) return t("vendorReturn.badAmount", { index: i + 1 });
   }
   const cash = Number(cashRefund);
-  if (cash != null && !Number.isNaN(cash) && cash > 0) {
-    if (cash > returnedTotal) return t("validation.amountPositive");
-    if (cash > maxCreditRefundable) return t("vendorReturn.cashTooHigh");
+  if (!Number.isNaN(cash) && cash > 0) {
+    if (cash > returnedTotal) return t("vendorReturn.cashTooHigh");
+    if (cash > maxCreditRefundable) return t("vendorReturn.noRefundableCredit");
   }
   return null;
 }

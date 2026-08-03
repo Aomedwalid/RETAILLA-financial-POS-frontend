@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { formatCurrency } from "@/lib/format";
 import { billNet, toNum } from "@/features/vendors/types";
 import type { BillResponse, PaymentChannel, VendorReturnLineRequest } from "@/features/vendors/types";
+import { validateVendorReturn } from "@/features/vendors/validation";
 import Toast from "@/components/ui/Toast";
 
 interface VendorReturnModalProps {
@@ -91,31 +92,12 @@ export default function VendorReturnModal({ vendorId, bill, onClose }: VendorRet
 
   async function handleSubmit() {
     setError("");
-    if (rows.length === 0) {
-      setError(t("vendorReturn.noLines"));
+    const invalid = validateVendorReturn(rows, cashRefund, returnedTotal, maxCredit, t);
+    if (invalid) {
+      setError(invalid);
       return;
-    }
-    for (const [i, r] of rows.entries()) {
-      const q = Number(r.quantity);
-      if (!r.variant_id || !Number.isFinite(q) || q < 1) {
-        setError(t("vendorReturn.badRow", { index: i + 1 }));
-        return;
-      }
-      const u = Number(r.unit_amount);
-      if (!Number.isFinite(u) || u < 0) {
-        setError(t("vendorReturn.badRow", { index: i + 1 }));
-        return;
-      }
     }
     const cash = Number(cashRefund) || 0;
-    if (cash > returnedTotal) {
-      setError(t("vendorReturn.cashTooHigh"));
-      return;
-    }
-    if (cash > maxCredit) {
-      setError(t("vendorReturn.noRefundableCredit"));
-      return;
-    }
 
     const lines: VendorReturnLineRequest[] = rows.map((r) => ({
       variant_id: r.variant_id,
